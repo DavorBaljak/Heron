@@ -83,7 +83,18 @@ Izvori:
 
 Vremenska prognoza, kalendar (godišnji odmori, gosti) i slični izvori ulaze u sustav kao dodatni read-only izvori koje MCP server agregira uz Loxone stanje prije nego dođu do LLM-a. Ovi izvori nemaju i ne smiju imati pristup natrag prema Loxone action alatima — isključivo su ulaz u kontekst za sugestije.
 
-## 6. Tech stack i sljedeći koraci
+## 6. Mobilna aplikacija (glasovni interface)
+
+Planirana je mobilna aplikacija kao "hands-free" ulaz prema agentu, prvenstveno za trenutke kad tipkanje nije zgodno (npr. ruke zauzete).
+
+- **Ulaz**: govor → STT (speech-to-text) → tekst se šalje agentu kao obična NL naredba, isti put kao i tekstualni unos.
+- **Izlaz**: odgovor agenta → TTS (text-to-speech), izgovoren korisniku.
+- **Opseg za sada — samo interna mreža**: aplikacija se koristi kao asistent unutar kuće, spojena izravno na agenta preko kućne mreže (isti trust boundary kao i sve ostalo — vidi #4). Ne uvodi se pristup izvana niti VPN/relay za rad izvan kuće; to je eksplicitno izvan opsega dok se ne odluči drugačije.
+- STT/TTS obrada (on-device vs. lokalni servis) bira se kasnije, u implementacijskoj fazi — princip je isti kao za LLM: audio/transkript ne smije izaći izvan kućne mreže dok se ne definira drugačije pravilo filtriranja.
+- Mobilna app je samo dodatni klijent agenta (UI/glasovni sloj) — ne dobiva nikakav zaseban pristup MCP serveru niti Miniserveru.
+
+## 7. Tech stack i sljedeći koraci
 
 - **MCP server i agent**: TypeScript/Node, koristeći službeni MCP TypeScript SDK.
 - **Prvi implementacijski milestone** (izvan opsega ovog dokumenta): inicijalizacija TypeScript projekta i MCP server skeleton s isključivo discovery alatima (najniži rizik), zatim monitoring, pa tek na kraju action razina s punim confirmation-flowom.
+- Mobilna aplikacija (glasovni interface) dolazi na red nakon što agent i MCP server rade s barem monitoring razinom — nije dio prvog milestonea.
