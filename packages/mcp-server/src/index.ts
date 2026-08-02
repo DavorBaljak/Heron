@@ -1,7 +1,16 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { LoxoneClient } from "./loxone/client.js";
 import { registerDiscoveryTools } from "./tools/discovery/index.js";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+try {
+  process.loadEnvFile(path.resolve(here, "../../../.env"));
+} catch {
+  // No repo-root .env — fall back to whatever's already in the environment.
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];

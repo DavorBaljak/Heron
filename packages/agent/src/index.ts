@@ -1,8 +1,17 @@
 import { createInterface } from "node:readline/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { toAnthropicTools } from "./anthropicTools.js";
 import { connectToMcpServer } from "./mcpClient.js";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+try {
+  process.loadEnvFile(path.resolve(here, "../../../.env"));
+} catch {
+  // No repo-root .env — fall back to whatever's already in the environment.
+}
 
 const SYSTEM_PROMPT = `You are Heron, a natural-language interface for a home automation system.
 You have no way to affect the house except by calling the tools you've been given —
