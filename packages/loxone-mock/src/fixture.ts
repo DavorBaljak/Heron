@@ -31,3 +31,9 @@ export const fixtureStructure = {
     },
   },
 };
+
+export const fixtureStateValues: Record<string, number | string> = {
+  "state-living-light-active": 0,
+  "state-bedroom-light-active": 0,
+  "state-living-blind-position": 0,
+};

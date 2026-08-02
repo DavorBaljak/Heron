@@ -11,10 +11,11 @@ Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/m
 - `npm install` — install all workspace dependencies (run from repo root).
 - `npm run build` — build all packages.
 - `npm test --workspace=@heron/mcp-server` — run `@heron/mcp-server`'s tests (Node's built-in test runner via `tsx --test`), including the integration test that spins up `@heron/loxone-mock` in-process.
-- `npm run dev --workspace=@heron/loxone-mock` — start the mock Miniserver standalone (default port 8080, override with `PORT`).
+- `npm test --workspace=@heron/loxone-mock` — run the mock's own tests (auth validation, command/state mutation, WebSocket push).
+- `npm run dev --workspace=@heron/loxone-mock` — start the mock Miniserver standalone (default port 8080, override with `PORT`; default credentials `test`/`test`).
 - `npm run dev --workspace=@heron/mcp-server` — start the MCP server over stdio; requires `LOXONE_HOST`, `LOXONE_USER`, `LOXONE_PASSWORD` env vars (point `LOXONE_HOST` at the mock, e.g. `localhost:8080`, for local testing).
 
-`@heron/loxone-mock` (see its README) does not implement real Loxone cryptography — it validates control flow and structure parsing only, not a substitute for testing against a real Miniserver.
+`@heron/loxone-mock` (see its README) genuinely validates the getkey2/gettoken HMAC auth handshake and mutates real in-memory device state via `/jdev/sps/io/{uuid}/{command}`, pushing updates over a `/ws/rfc6455` WebSocket. Its one known simplification: WS push uses plain JSON frames rather than Loxone's undocumented proprietary binary framing.
 
 ## What this project is
 
