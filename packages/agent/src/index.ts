@@ -11,6 +11,7 @@ import {
   loadDiscoveryCache,
   saveDiscoveryCache,
 } from "./discoveryCache.js";
+import { loadLoxoneConfig, saveLoxoneConfig } from "./loxoneConfig.js";
 import { connectToMcpServer } from "./mcpClient.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -31,6 +32,7 @@ decline — if they do, tell them plainly rather than assuming it happened.`;
 
 const DEFAULT_DISCOVERY_CACHE_PATH = path.resolve(here, "../data/discovery-cache.json");
 const DEFAULT_ACTION_LOG_PATH = path.resolve(here, "../data/action-log.jsonl");
+const DEFAULT_LOXONE_CONFIG_PATH = path.resolve(here, "../data/loxone-config.json");
 
 // Confirmation gate for action-tier tools. This is a hardcoded allowlist the
 // agent itself controls — MCP tool "annotations" (destructiveHint etc.) are
@@ -46,9 +48,60 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/**
+ * There's no reliable way to auto-discover a Loxone Miniserver on the local
+ * network, so if LOXONE_HOST/USER/PASSWORD aren't already set (via .env or
+ * the shell), ask for them here instead of requiring the user to dig
+ * through config files — and remember the answer on disk for next time.
+ */
+async function ensureLoxoneConnection(ask: (prompt: string) => Promise<string | undefined>): Promise<void> {
+  if (process.env.LOXONE_HOST && process.env.LOXONE_USER && process.env.LOXONE_PASSWORD) {
+    return;
+  }
+
+  const configPath = process.env.HERON_LOXONE_CONFIG_PATH ?? DEFAULT_LOXONE_CONFIG_PATH;
+  const cached = await loadLoxoneConfig(configPath);
+  if (cached) {
+    process.env.LOXONE_HOST = cached.host;
+    process.env.LOXONE_USER = cached.user;
+    process.env.LOXONE_PASSWORD = cached.password;
+    console.log(`Using saved Loxone connection (${cached.host}) from ${configPath}.`);
+    return;
+  }
+
+  console.log("No Loxone connection configured yet — let's set it up (saved for next time, not asked again).");
+  const host = (await ask("Loxone Miniserver address (host or host:port): "))?.trim();
+  const user = (await ask("Loxone username: "))?.trim();
+  const password = await ask("Loxone password: ");
+  if (!host || !user || !password) {
+    throw new Error("Loxone connection setup was not completed.");
+  }
+
+  process.env.LOXONE_HOST = host;
+  process.env.LOXONE_USER = user;
+  process.env.LOXONE_PASSWORD = password;
+  await saveLoxoneConfig(configPath, { host, user, password });
+  console.log(`Saved to ${configPath}.`);
+}
+
 async function main() {
   const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  // rl.question() throws ERR_USE_AFTER_CLOSE once stdin hits EOF (e.g. piped
+  // input, non-interactive runs) — treat that as a clean end of input.
+  async function ask(prompt: string): Promise<string | undefined> {
+    try {
+      return await rl.question(prompt);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ERR_USE_AFTER_CLOSE") return undefined;
+      throw error;
+    }
+  }
+
+  await ensureLoxoneConnection(ask);
 
   console.log("Connecting to the Heron MCP server...");
   const mcp = await connectToMcpServer();
@@ -69,18 +122,6 @@ async function main() {
   const actionLogPath = process.env.HERON_ACTION_LOG_PATH ?? DEFAULT_ACTION_LOG_PATH;
 
   const messages: MessageParam[] = [];
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-  // rl.question() throws ERR_USE_AFTER_CLOSE once stdin hits EOF (e.g. piped
-  // input, non-interactive runs) — treat that as a clean end of input.
-  async function ask(prompt: string): Promise<string | undefined> {
-    try {
-      return await rl.question(prompt);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ERR_USE_AFTER_CLOSE") return undefined;
-      throw error;
-    }
-  }
 
   console.log('Heron agent ready. Type a message, "refresh" to re-run discovery, or "exit" to quit.');
   while (true) {
