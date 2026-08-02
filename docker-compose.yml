@@ -13,9 +13,10 @@ services:
     depends_on:
       - loxone-mock
     environment:
-      - LOXONE_HOST=loxone-mock:8080
-      - LOXONE_USER=test
-      - LOXONE_PASSWORD=test
+      # No LOXONE_HOST/USER/PASSWORD here on purpose: the container runs
+      # `npm run setup --workspace=@heron/agent` interactively once (saved to
+      # the ./data/agent volume below), the same flow as running without
+      # Docker at all, instead of pre-baking credentials into compose.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
     volumes:
