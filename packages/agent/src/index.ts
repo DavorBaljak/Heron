@@ -2,17 +2,11 @@ import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
-import { appendActionLog } from "./actionLog.js";
 import { toAnthropicTools } from "./anthropicTools.js";
-import {
-  fetchDiscoverySnapshot,
-  formatDiscoverySummary,
-  loadDiscoveryCache,
-  saveDiscoveryCache,
-} from "./discoveryCache.js";
+import { fetchDiscoverySnapshot, loadDiscoveryCache, saveDiscoveryCache } from "./discoveryCache.js";
 import { loadLoxoneConfig } from "./loxoneConfig.js";
 import { connectToMcpServer } from "./mcpClient.js";
+import { createSession } from "./session.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 try {
@@ -21,24 +15,9 @@ try {
   // No repo-root .env — fall back to whatever's already in the environment.
 }
 
-const SYSTEM_PROMPT = `You are Heron, a natural-language interface for a home automation system.
-You have no way to affect the house except by calling the tools you've been given —
-those tools are the entire, whitelisted surface of what you may do. Never claim to have
-taken an action you didn't call a tool for, and never guess device state; call a
-discovery/monitoring tool instead. If no tool can answer a question, say so plainly.
-Action-tier tools (set_control_state, activate_scene) perform real writes against the
-house; the user will be asked to explicitly confirm each one before it runs, and may
-decline — if they do, tell them plainly rather than assuming it happened.`;
-
 const DEFAULT_DISCOVERY_CACHE_PATH = path.resolve(here, "../data/discovery-cache.json");
 const DEFAULT_ACTION_LOG_PATH = path.resolve(here, "../data/action-log.jsonl");
 const DEFAULT_LOXONE_CONFIG_PATH = path.resolve(here, "../data/loxone-config.json");
-
-// Confirmation gate for action-tier tools. This is a hardcoded allowlist the
-// agent itself controls — MCP tool "annotations" (destructiveHint etc.) are
-// documented by the SDK as hints a client must never base a security
-// decision on, since a server could always misreport them.
-const ACTION_TOOL_NAMES = new Set(["set_control_state", "activate_scene"]);
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -85,19 +64,6 @@ async function main() {
   const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-  // rl.question() throws ERR_USE_AFTER_CLOSE once stdin hits EOF (e.g. piped
-  // input, non-interactive runs) — treat that as a clean end of input.
-  async function ask(prompt: string): Promise<string | undefined> {
-    try {
-      return await rl.question(prompt);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ERR_USE_AFTER_CLOSE") return undefined;
-      throw error;
-    }
-  }
-
   console.log("Connecting to the Heron MCP server...");
   const mcp = await connectToMcpServer();
   const { tools: mcpTools } = await mcp.listTools();
@@ -116,7 +82,25 @@ async function main() {
   }
   const actionLogPath = process.env.HERON_ACTION_LOG_PATH ?? DEFAULT_ACTION_LOG_PATH;
 
-  const messages: MessageParam[] = [];
+  const session = createSession({ anthropic, model, mcp, tools, discovery, discoveryCachePath: cachePath, actionLogPath });
+
+  // Created only now, right before the interactive loop: readline starts
+  // parsing stdin as soon as the Interface exists, even before .question()
+  // is first called, so creating it earlier risks losing input typed during
+  // the slow MCP-connect/discovery startup above (no listener is attached
+  // to catch that first 'line' event yet).
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  // rl.question() throws ERR_USE_AFTER_CLOSE once stdin hits EOF (e.g. piped
+  // input, non-interactive runs) — treat that as a clean end of input.
+  async function ask(prompt: string): Promise<string | undefined> {
+    try {
+      return await rl.question(prompt);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ERR_USE_AFTER_CLOSE") return undefined;
+      throw error;
+    }
+  }
 
   console.log('Heron agent ready. Type a message, "refresh" to re-run discovery, or "exit" to quit.');
   while (true) {
@@ -127,71 +111,20 @@ async function main() {
 
     if (trimmed === "refresh") {
       console.log("Re-running discovery...");
-      discovery = await fetchDiscoverySnapshot(mcp);
-      await saveDiscoveryCache(cachePath, discovery);
+      await session.refreshDiscovery();
       console.log(`Discovery refreshed — cached to ${cachePath}.`);
       continue;
     }
 
-    messages.push({ role: "user", content: input });
-
-    // Tool-use loop: keep calling Claude and executing any requested MCP
-    // tools until it responds with plain text instead of a tool call.
-    while (true) {
-      const response = await anthropic.messages.create({
-        model,
-        max_tokens: 1024,
-        system: `${SYSTEM_PROMPT}\n\n${formatDiscoverySummary(discovery)}`,
-        messages,
-        tools,
-      });
-      messages.push({ role: "assistant", content: response.content });
-
-      const toolUses = response.content.filter((block) => block.type === "tool_use");
-      if (toolUses.length === 0) {
-        const text = response.content
-          .filter((block) => block.type === "text")
-          .map((block) => block.text)
-          .join("");
-        console.log(text);
-        break;
-      }
-
-      const toolResults: ToolResultBlockParam[] = [];
-      for (const toolUse of toolUses) {
-        if (ACTION_TOOL_NAMES.has(toolUse.name)) {
-          console.log(`\nProposed action: ${toolUse.name}(${JSON.stringify(toolUse.input)})`);
-          const answer = await ask("Confirm and execute this action? [y/N] ");
-          const approved = answer !== undefined && /^y(es)?$/i.test(answer.trim());
-          await appendActionLog(actionLogPath, {
-            timestamp: new Date().toISOString(),
-            tool: toolUse.name,
-            arguments: toolUse.input,
-            confirmed: approved,
-          });
-          if (!approved) {
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: "The user declined to confirm this action; it was not executed.",
-              is_error: true,
-            });
-            continue;
-          }
-        } else {
-          console.log(`  [calling ${toolUse.name}]`);
-        }
-
-        const result = await mcp.callTool({ name: toolUse.name, arguments: toolUse.input as Record<string, unknown> });
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: result.content as ToolResultBlockParam["content"],
-          is_error: result.isError === true,
-        });
-      }
-      messages.push({ role: "user", content: toolResults });
-    }
+    const reply = await session.handleMessage(input, {
+      onToolCall: (name) => console.log(`  [calling ${name}]`),
+      confirmAction: async (name, args) => {
+        console.log(`\nProposed action: ${name}(${JSON.stringify(args)})`);
+        const answer = await ask("Confirm and execute this action? [y/N] ");
+        return answer !== undefined && /^y(es)?$/i.test(answer.trim());
+      },
+    });
+    console.log(reply);
   }
 
   rl.close();
