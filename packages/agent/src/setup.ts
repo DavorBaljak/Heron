@@ -27,7 +27,9 @@ async function main() {
   }
 
   await saveLoxoneConfig(configPath, { host, user, password });
-  console.log(`\nSaved to ${configPath}. You can now run the agent (npm run dev --workspace=@heron/agent).`);
+  console.log("\nSaved. Start the agent now:");
+  console.log("  Docker:  docker compose up -d --force-recreate heron-agent");
+  console.log("  Local:   npm run dev --workspace=@heron/agent");
 }
 
 main().catch((error) => {
