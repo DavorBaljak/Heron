@@ -18,5 +18,7 @@ services:
       - LOXONE_PASSWORD=test
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
+    volumes:
+      - ./data/agent:/app/packages/agent/data
     stdin_open: true
     tty: true

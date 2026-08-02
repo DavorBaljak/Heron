@@ -16,6 +16,12 @@ export class LoxoneClient {
   private structure: LoxoneStructure | undefined;
   private structureFetchedAt = 0;
 
+  // In-flight promises, so concurrent calls (e.g. discovery tools fired via
+  // Promise.all) share one auth handshake / structure fetch instead of
+  // racing each other against the Miniserver.
+  private authPromise: Promise<void> | undefined;
+  private structurePromise: Promise<LoxoneStructure> | undefined;
+
   constructor(options: LoxoneClientOptions) {
     this.baseUrl = `http://${options.host}`;
     this.user = options.user;
@@ -29,6 +35,14 @@ export class LoxoneClient {
     this.token = await acquireToken(this.baseUrl, this.user, this.password, this.clientId, this.clientName);
   }
 
+  private async ensureAuthenticated(): Promise<void> {
+    if (this.token) return;
+    this.authPromise ??= this.authenticate().finally(() => {
+      this.authPromise = undefined;
+    });
+    await this.authPromise;
+  }
+
   async close(): Promise<void> {
     if (this.token) {
       await killToken(this.baseUrl, this.token.token, this.user);
@@ -38,11 +52,19 @@ export class LoxoneClient {
 
   async getStructure(): Promise<LoxoneStructure> {
     const isStale = Date.now() - this.structureFetchedAt > this.structureCacheMs;
-    if (!this.structure || isStale) {
-      this.structure = await this.fetchStructure();
-      this.structureFetchedAt = Date.now();
+    if (this.structure && !isStale) {
+      return this.structure;
     }
-    return this.structure;
+    this.structurePromise ??= this.fetchStructure()
+      .then((structure) => {
+        this.structure = structure;
+        this.structureFetchedAt = Date.now();
+        return structure;
+      })
+      .finally(() => {
+        this.structurePromise = undefined;
+      });
+    return this.structurePromise;
   }
 
   /**
@@ -51,9 +73,7 @@ export class LoxoneClient {
    * scene concept in the structure file.
    */
   async listScenes(): Promise<LoxoneScene[]> {
-    if (!this.token) {
-      await this.authenticate();
-    }
+    await this.ensureAuthenticated();
     const res = await fetch(`${this.baseUrl}/jdev/sps/scenes`, {
       headers: { Authorization: `Bearer ${this.token?.token}` },
     });
@@ -65,9 +85,7 @@ export class LoxoneClient {
   }
 
   private async fetchStructure(): Promise<LoxoneStructure> {
-    if (!this.token) {
-      await this.authenticate();
-    }
+    await this.ensureAuthenticated();
     const res = await fetch(`${this.baseUrl}/data/LoxAPP3.json`, {
       headers: { Authorization: `Bearer ${this.token?.token}` },
     });

@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { toAnthropicTools } from "./anthropicTools.js";
+import {
+  fetchDiscoverySnapshot,
+  formatDiscoverySummary,
+  loadDiscoveryCache,
+  saveDiscoveryCache,
+} from "./discoveryCache.js";
 import { connectToMcpServer } from "./mcpClient.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +24,8 @@ You have no way to affect the house except by calling the tools you've been give
 those tools are the entire, whitelisted surface of what you may do. Never claim to have
 taken an action you didn't call a tool for, and never guess device state; call a
 discovery/monitoring tool instead. If no tool can answer a question, say so plainly.`;
+
+const DEFAULT_DISCOVERY_CACHE_PATH = path.resolve(here, "../data/discovery-cache.json");
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -37,15 +45,36 @@ async function main() {
   const tools = toAnthropicTools(mcpTools);
   console.log(`Connected. Available tools: ${mcpTools.map((t) => t.name).join(", ")}`);
 
+  const cachePath = process.env.HERON_DISCOVERY_CACHE_PATH ?? DEFAULT_DISCOVERY_CACHE_PATH;
+  let discovery = await loadDiscoveryCache(cachePath);
+  if (discovery) {
+    console.log(`Loaded cached house structure from ${cachePath} (fetched ${discovery.fetchedAt}).`);
+  } else {
+    console.log("No cached house structure found — running discovery once...");
+    discovery = await fetchDiscoverySnapshot(mcp);
+    await saveDiscoveryCache(cachePath, discovery);
+    console.log(`Discovery complete — cached to ${cachePath}.`);
+  }
+
   const messages: MessageParam[] = [];
   const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
 
-  console.log('Heron agent ready. Type a message, or "exit" to quit.');
+  console.log('Heron agent ready. Type a message, "refresh" to re-run discovery, or "exit" to quit.');
   rl.prompt();
   // Iterating the interface (rather than repeated rl.question() calls)
   // handles stdin EOF cleanly instead of throwing ERR_USE_AFTER_CLOSE.
   for await (const input of rl) {
-    if (input.trim() === "exit" || input.trim() === "quit") break;
+    const trimmed = input.trim();
+    if (trimmed === "exit" || trimmed === "quit") break;
+
+    if (trimmed === "refresh") {
+      console.log("Re-running discovery...");
+      discovery = await fetchDiscoverySnapshot(mcp);
+      await saveDiscoveryCache(cachePath, discovery);
+      console.log(`Discovery refreshed — cached to ${cachePath}.`);
+      rl.prompt();
+      continue;
+    }
 
     messages.push({ role: "user", content: input });
 
@@ -55,7 +84,7 @@ async function main() {
       const response = await anthropic.messages.create({
         model,
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: `${SYSTEM_PROMPT}\n\n${formatDiscoverySummary(discovery)}`,
         messages,
         tools,
       });

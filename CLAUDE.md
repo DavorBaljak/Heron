@@ -8,6 +8,8 @@ Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/m
 
 `@heron/agent` is a CLI chat loop backed by Claude (Anthropic API) with an Anthropic tool-use loop wired to the MCP server's tools — it spawns `@heron/mcp-server` as a child process over stdio (`packages/agent/src/mcpClient.ts`) and never opens any other connection. Since only discovery-tier (read-only) tools exist so far, there's no confirmation-flow yet; that must be added to the agent's tool-use loop before any action-tier tool is introduced (see ARCHITECTURE.md #4).
 
+On startup the agent runs the full discovery tier once (`packages/agent/src/discoveryCache.ts`) and persists the result to a JSON file on disk (default `packages/agent/data/discovery-cache.json`, override with `HERON_DISCOVERY_CACHE_PATH`) rather than re-running discovery tools on every question — a formatted summary is injected into the system prompt each turn. If the cache file already exists, it's loaded instead of re-fetching. Type `refresh` in the CLI (intercepted before reaching Claude) to re-run discovery on demand, e.g. after changing the house in Loxone Config. `LoxoneClient.getStructure()`/`listScenes()` in mcp-server are single-flight (`ensureAuthenticated`/`structurePromise`) specifically because this snapshot fetch fires several discovery tools concurrently via `Promise.all` — without that, concurrent calls raced the getkey2/gettoken handshake against the mock and caused spurious 401s (see the regression test `client.integration.test.ts` / "concurrent calls on a freshly-constructed client don't race the auth handshake").
+
 ## Commands
 
 - `npm install` — install all workspace dependencies (run from repo root).
@@ -27,7 +29,8 @@ Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/m
 `Dockerfile` is a multi-stage build with two runtime targets: `loxone-mock` (standalone) and `heron` (agent + mcp-server bundled together, since the agent spawns mcp-server as a child process rather than talking to it over the network — see `packages/agent/src/mcpClient.ts`). `docker-compose.yml` wires them up:
 
 - `docker compose up -d loxone-mock` — starts the mock on host port 8180 (container port 8080; 8080 may already be taken by something else on the host).
-- `docker compose run --rm heron-agent` — runs the interactive agent CLI against the running mock over the compose network (`LOXONE_HOST=loxone-mock:8080`). Reads `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` from the repo-root `.env` (compose auto-loads it for `${...}` substitution).
+- `docker compose run --rm heron-agent` (ephemeral) or `docker compose up -d` (both services, kept running) — the agent CLI against the mock over the compose network (`LOXONE_HOST=loxone-mock:8080`). Reads `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` from the repo-root `.env` (compose auto-loads it for `${...}` substitution). When run with `up -d`, attach to actually chat with it: `docker attach loxone-heron-agent-1` (detach with `Ctrl+P Ctrl+Q`, not `Ctrl+C`).
+- The agent's discovery cache is bind-mounted to `./data/agent` on the host (`docker-compose.yml`), so it survives `docker compose down`/`up` — delete that directory to force re-discovery.
 - `docker compose down` — tear down.
 
 In the `heron` image, `MCP_SERVER_ENTRY` is set to the compiled `packages/mcp-server/dist/index.js`; `mcpClient.ts` runs it directly with `node` instead of `npx tsx` when the entry path ends in `.js`.

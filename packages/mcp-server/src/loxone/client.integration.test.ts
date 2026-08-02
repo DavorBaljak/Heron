@@ -48,3 +48,26 @@ test("lists scenes from the mock Miniserver", async () => {
   assert.equal(scenes.length, 6);
   assert.ok(scenes.some((scene) => scene.id === "scene-severe-weather"));
 });
+
+test("concurrent calls on a freshly-constructed client don't race the auth handshake", async () => {
+  const freshServer = createMockLoxoneServer();
+  await new Promise<void>((resolve) => freshServer.listen(0, resolve));
+  const { port } = freshServer.address() as AddressInfo;
+  const freshClient = new LoxoneClient({ host: `localhost:${port}`, user: "test", password: "test" });
+
+  // Regression test: firing several discovery calls at once (as the agent's
+  // fetchDiscoverySnapshot does via Promise.all) used to trigger overlapping
+  // getkey2/gettoken handshakes that clobbered each other in the mock,
+  // causing spurious 401s. All of these should now share one auth flow.
+  const [structureA, structureB, scenes] = await Promise.all([
+    freshClient.getStructure(),
+    freshClient.getStructure(),
+    freshClient.listScenes(),
+  ]);
+
+  assert.equal(structureA, structureB);
+  assert.equal(scenes.length, 6);
+
+  await freshClient.close();
+  await new Promise<void>((resolve) => freshServer.close(() => resolve()));
+});
