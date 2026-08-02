@@ -1,0 +1,6 @@
+<resources>
+    <!-- Sampled from Logo.png's own background so the adaptive-icon
+         foreground blends in regardless of which mask shape (circle,
+         squircle, etc.) the launcher applies. -->
+    <color name="ic_launcher_background">#012534</color>
+</resources>

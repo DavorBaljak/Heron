@@ -64,9 +64,9 @@ if (-not (Test-Path ".env")) {
 # --- 3. Build images (no loxone-mock -- this is for a real Miniserver) -----
 
 Info "Building Heron images (this can take a few minutes the first time)"
-docker compose build heron-agent gateway
+docker compose build heron-agent gateway dashboard
 
-# --- 4/5. Loxone connection setup (agent + gateway, separate configs) -----
+# --- 4/5. Loxone connection setup (agent + gateway + dashboard, separate configs) --
 
 if (-not (Test-Path "./data/agent/loxone-config.json")) {
     Info "Loxone connection setup -- agent"
@@ -82,16 +82,24 @@ if (-not (Test-Path "./data/gateway/loxone-config.json")) {
     Info "Gateway's Loxone connection already configured -- skipping (delete data/gateway/loxone-config.json to redo)."
 }
 
+if (-not (Test-Path "./data/dashboard/loxone-config.json")) {
+    Info "Loxone connection setup -- dashboard"
+    docker compose run --rm -e HERON_LOXONE_CONFIG_PATH=/app/packages/dashboard/data/loxone-config.json dashboard node packages/agent/dist/setup.js
+} else {
+    Info "Dashboard's Loxone connection already configured -- skipping (delete data/dashboard/loxone-config.json to redo)."
+}
+
 # --- 6. Start ---------------------------------------------------------------
 
 Info "Starting Heron"
-docker compose up -d heron-agent gateway
+docker compose up -d heron-agent gateway dashboard
 
-# --- 7. Print what the phone needs -----------------------------------------
+# --- 7. Print what the phone/browser need -----------------------------------
 
 Info "Done"
 $lanIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch "Loopback|vEthernet" -and $_.IPAddress -notlike "169.254.*" } | Select-Object -First 1).IPAddress
 Write-Host "Gateway address for the Android app: ${lanIp}:8190"
+Write-Host "Dashboard: http://${lanIp}:8191"
 Write-Host ""
 Write-Host "Pairing token:"
 docker compose logs gateway 2>&1 | Select-String -Pattern "Pairing token" -Context 0,1

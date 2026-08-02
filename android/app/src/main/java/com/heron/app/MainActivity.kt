@@ -11,7 +11,6 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.LayoutInflater
 import android.widget.EditText
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,7 +33,8 @@ class MainActivity : AppCompatActivity(), GatewayListener {
     private lateinit var statusText: TextView
     private lateinit var transcriptText: TextView
     private lateinit var transcriptScroll: android.widget.ScrollView
-    private lateinit var alwaysListeningSwitch: Switch
+    private lateinit var micButton: android.widget.ImageView
+    private var micButtonPulse: android.animation.ObjectAnimator? = null
 
     private var gateway: GatewayClient? = null
     private var speechRecognizer: SpeechRecognizer? = null
@@ -44,10 +44,11 @@ class MainActivity : AppCompatActivity(), GatewayListener {
     private var ttsSpeaking = false
     private var currentListenMode = ListenMode.TAP
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    /** While System.currentTimeMillis() < this, FOLLOW_UP keeps retrying instead of giving up —
-     * a real 5-second command window regardless of how eagerly the recognizer itself times out. */
-    private var followUpDeadlineMs = 0L
-    private val followUpWindowMs = 5000L
+    /** While System.currentTimeMillis() < this, TAP/FOLLOW_UP keep retrying instead of giving
+     * up — a real 5-second window to actually say something, regardless of how eagerly the
+     * recognizer's own (unreliable) silence-detection times out mid-pause. */
+    private var listenDeadlineMs = 0L
+    private val listenWindowMs = 5000L
     /** Set from onResponse; if Heron's own reply ends in a question, the mic should
      * come straight back up listening for the answer instead of waiting for the
      * wake word again. */
@@ -81,11 +82,10 @@ class MainActivity : AppCompatActivity(), GatewayListener {
         statusText = findViewById(R.id.statusText)
         transcriptText = findViewById(R.id.transcriptText)
         transcriptScroll = findViewById(R.id.transcriptScroll)
-        alwaysListeningSwitch = findViewById(R.id.alwaysListeningSwitch)
+        micButton = findViewById(R.id.micButton)
 
         findViewById<android.widget.Button>(R.id.settingsButton).setOnClickListener { showSettingsDialog() }
-        findViewById<android.widget.Button>(R.id.micButton).setOnClickListener { onMicTapped() }
-        alwaysListeningSwitch.setOnCheckedChangeListener { _, checked -> onAlwaysListeningToggled(checked) }
+        micButton.setOnClickListener { onMicTapped() }
 
         tts = TextToSpeech(this) { }
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -96,7 +96,7 @@ class MainActivity : AppCompatActivity(), GatewayListener {
                 ttsSpeaking = false
                 runOnUiThread {
                     if (lastResponseWasQuestion) {
-                        followUpDeadlineMs = System.currentTimeMillis() + followUpWindowMs
+                        listenDeadlineMs = System.currentTimeMillis() + listenWindowMs
                         startListening(ListenMode.FOLLOW_UP)
                     } else if (alwaysListening) {
                         startListening(ListenMode.WAKE_WORD)
@@ -173,28 +173,8 @@ class MainActivity : AppCompatActivity(), GatewayListener {
             return
         }
         if (!ensureAudioPermission()) return
+        listenDeadlineMs = System.currentTimeMillis() + listenWindowMs
         startListening(ListenMode.TAP)
-    }
-
-    private fun onAlwaysListeningToggled(enabled: Boolean) {
-        alwaysListening = enabled
-        if (enabled) {
-            if (gateway == null) {
-                Toast.makeText(this, "Configure the gateway connection first.", Toast.LENGTH_LONG).show()
-                alwaysListeningSwitch.isChecked = false
-                alwaysListening = false
-                return
-            }
-            if (!ensureAudioPermission()) {
-                alwaysListeningSwitch.isChecked = false
-                alwaysListening = false
-                return
-            }
-            if (!ttsSpeaking) startListening(ListenMode.WAKE_WORD)
-        } else {
-            speechRecognizer?.stopListening()
-            statusText.text = if (gateway != null) "Connected" else "Not configured"
-        }
     }
 
     private fun ensureAudioPermission(): Boolean {
@@ -234,22 +214,23 @@ class MainActivity : AppCompatActivity(), GatewayListener {
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 Log.d(TAG, "onReadyForSpeech mode=$currentListenMode")
-                statusText.text = when (currentListenMode) {
-                    ListenMode.WAKE_WORD -> "Listening for \"Heron\"..."
-                    else -> "Listening..."
-                }
+                // No status-text change here — the animated logo (showListeningIndicator)
+                // is the "I'm listening" signal now.
+                showListeningIndicator()
             }
 
             override fun onResults(results: Bundle?) {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 Log.d(TAG, "onResults mode=$currentListenMode matches=$matches")
+                hideListeningIndicator()
                 handleRecognized(matches?.firstOrNull())
             }
 
             override fun onError(error: Int) {
                 Log.d(TAG, "onError mode=$currentListenMode error=$error")
-                if (currentListenMode == ListenMode.FOLLOW_UP) {
-                    retryFollowUpOrGiveUp()
+                hideListeningIndicator()
+                if (currentListenMode == ListenMode.FOLLOW_UP || currentListenMode == ListenMode.TAP) {
+                    retryListeningOrGiveUp()
                 } else {
                     restartIfAlwaysListening()
                 }
@@ -262,6 +243,7 @@ class MainActivity : AppCompatActivity(), GatewayListener {
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {
                 Log.d(TAG, "onEndOfSpeech")
+                hideListeningIndicator()
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partialResults: Bundle?) {
@@ -287,8 +269,11 @@ class MainActivity : AppCompatActivity(), GatewayListener {
         Log.d(TAG, "handleRecognized mode=$currentListenMode text=$text")
         when (currentListenMode) {
             ListenMode.TAP -> {
-                if (!text.isNullOrBlank()) sendCommand(text)
-                statusText.text = "Connected"
+                if (!text.isNullOrBlank()) {
+                    sendCommand(text)
+                } else {
+                    retryListeningOrGiveUp()
+                }
             }
             ListenMode.WAKE_WORD -> {
                 if (text.isNullOrBlank()) {
@@ -304,7 +289,7 @@ class MainActivity : AppCompatActivity(), GatewayListener {
                     restartIfAlwaysListening()
                 } else {
                     // Heard "Heron" alone — give a real 5s window for the actual command.
-                    followUpDeadlineMs = System.currentTimeMillis() + followUpWindowMs
+                    listenDeadlineMs = System.currentTimeMillis() + listenWindowMs
                     mainHandler.postDelayed({ startListening(ListenMode.FOLLOW_UP) }, 400)
                 }
             }
@@ -312,16 +297,19 @@ class MainActivity : AppCompatActivity(), GatewayListener {
                 if (!text.isNullOrBlank()) {
                     sendCommand(text)
                 } else {
-                    retryFollowUpOrGiveUp()
+                    retryListeningOrGiveUp()
                 }
             }
         }
     }
 
-    /** Called when a FOLLOW_UP session ends with nothing recognized (error or blank result). */
-    private fun retryFollowUpOrGiveUp() {
-        if (System.currentTimeMillis() < followUpDeadlineMs) {
-            mainHandler.postDelayed({ startListening(ListenMode.FOLLOW_UP) }, 400)
+    /** Called when a TAP or FOLLOW_UP session ends with nothing recognized (error or blank
+     * result) — keeps retrying the same mode until listenDeadlineMs, instead of treating the
+     * recognizer's own (unreliable) silence cutoff as "the user is done talking". */
+    private fun retryListeningOrGiveUp() {
+        if (System.currentTimeMillis() < listenDeadlineMs) {
+            val mode = currentListenMode
+            mainHandler.postDelayed({ startListening(mode) }, 400)
         } else {
             restartIfAlwaysListening()
         }
@@ -346,6 +334,7 @@ class MainActivity : AppCompatActivity(), GatewayListener {
 
     private fun sendCommand(text: String) {
         appendTranscript("You: $text")
+        statusText.text = "Connected"
         gateway?.sendMessage(text)
     }
 
@@ -357,6 +346,40 @@ class MainActivity : AppCompatActivity(), GatewayListener {
             .replace(Regex("`([^`]*)`"), "$1")
             .replace(Regex("^#{1,6}\\s*", RegexOption.MULTILINE), "")
             .replace(Regex("^[-*]\\s+", RegexOption.MULTILINE), "")
+    }
+
+    /** Parenthetical asides are almost always a sensor/room/control label
+     * ("Entrance Gate (Ulazna kapija)") rather than something worth saying out
+     * loud — strip them for TTS only, the transcript keeps the full text. */
+    private fun stripParentheticals(text: String): String {
+        return text.replace(Regex("\\s*\\([^)]*\\)"), "").replace(Regex(" {2,}"), " ").trim()
+    }
+
+    /** Swaps the logo's baked-in static waveform for animated bars in the same spot,
+     * so the logo itself visibly "listens" instead of a plain status-text change. */
+    /** The listen button's own art has a baked-in mic/waveform, but it's a
+     * full-width responsive image rather than a fixed size, so precisely
+     * overlaying animated bars on the mic capsule (like the launcher-icon
+     * logo used to) isn't reliable across screen widths. Pulsing the whole
+     * button instead is simple and scales with any width. */
+    private fun showListeningIndicator() {
+        runOnUiThread {
+            micButtonPulse?.cancel()
+            micButtonPulse = android.animation.ObjectAnimator.ofFloat(micButton, "alpha", 1f, 0.55f).apply {
+                duration = 450L
+                repeatMode = android.animation.ValueAnimator.REVERSE
+                repeatCount = android.animation.ValueAnimator.INFINITE
+            }
+            micButtonPulse?.start()
+        }
+    }
+
+    private fun hideListeningIndicator() {
+        runOnUiThread {
+            micButtonPulse?.cancel()
+            micButtonPulse = null
+            micButton.alpha = 1f
+        }
     }
 
     private fun appendTranscript(line: String) {
@@ -394,7 +417,7 @@ class MainActivity : AppCompatActivity(), GatewayListener {
         lastResponseWasQuestion = clean.trim().endsWith("?")
         val result = tts?.setLanguage(Locale.forLanguageTag(settings.spokenLanguageTag))
         Log.d(TAG, "tts.setLanguage(${settings.spokenLanguageTag}) result=$result")
-        tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "heron-response")
+        tts?.speak(stripParentheticals(clean), TextToSpeech.QUEUE_FLUSH, null, "heron-response")
     }
 
     override fun onError(message: String) {

@@ -1,5 +1,7 @@
 # Heron
 
+<img src="Logo.png" alt="Heron logo" width="120" />
+
 Heron is an AI layer on top of your existing [Loxone](https://www.loxone.com/) home automation system. It does **not** replace Loxone's own automation logic (Config/rules running on your Miniserver) — it adds a natural-language, voice-first interface on top of it: talk to your house from an Android app, ask what state things are in, and ask it to change things, with broader context (weather, calendar, etc.) to help you get more out of the automation you already have.
 
 You talk to it, it talks back — no typing required once it's set up.
@@ -29,9 +31,9 @@ You talk to it, it talks back — no typing required once it's set up.
 
    Everything else — building the images, starting the services — happens automatically.
 
-3. When it finishes, the script prints two things you'll need on your phone:
-   - A **gateway address** (`your-computer's-LAN-IP:8190`)
-   - A **pairing token**
+3. When it finishes, the script prints what you'll need:
+   - A **gateway address** (`your-computer's-LAN-IP:8190`) and **pairing token**, for the Android app.
+   - A **dashboard URL** (`http://your-computer's-LAN-IP:8191`) — open it in any browser on your home network to see a live, auto-generated schematic of your house: every room, every control, updating in real time as things change. Read-only — it shows state, it doesn't control anything.
 
 4. Download the Android app APK from this repository's [Releases page](../../releases).
 
@@ -43,10 +45,10 @@ You talk to it, it talks back — no typing required once it's set up.
 
 ## Troubleshooting
 
-- **Can't connect from the phone:** make sure the phone is on the same Wi-Fi network as the computer running Heron, and that nothing (a firewall) is blocking port `8190` on your LAN.
-- **Wrong Loxone credentials, or you changed your Miniserver password:** delete `data/agent/loxone-config.json` and `data/gateway/loxone-config.json`, then re-run the install script — it will ask you for the connection details again.
+- **Can't connect from the phone or browser:** make sure the device is on the same Wi-Fi network as the computer running Heron, and that nothing (a firewall) is blocking ports `8190`/`8191` on your LAN.
+- **Wrong Loxone credentials, or you changed your Miniserver password:** delete `data/agent/loxone-config.json`, `data/gateway/loxone-config.json`, and `data/dashboard/loxone-config.json`, then re-run the install script — it will ask you for the connection details again.
 - **Want to change the Anthropic API key:** edit `.env` directly, then restart: `docker compose up -d --force-recreate heron-agent gateway`.
-- **Checking it's actually running:** `docker compose ps` should show `heron-agent` and `gateway` as `Up`. `docker compose logs gateway` shows the pairing token again if you need it.
+- **Checking it's actually running:** `docker compose ps` should show `heron-agent`, `gateway`, and `dashboard` as `Up`. `docker compose logs gateway` shows the pairing token again if you need it.
 
 ## For developers
 

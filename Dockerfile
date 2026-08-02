@@ -5,6 +5,9 @@
 #   networked service, so it stays bundled with mcp-server in one image.
 # - gateway: WebSocket bridge for the Android app, also spawns its own
 #   mcp-server child process, same reasoning as heron.
+# - dashboard: read-only web dashboard (house schematic + live state), same
+#   spawns-its-own-mcp-server-child reasoning; no ANTHROPIC_API_KEY needed
+#   since it never talks to Claude.
 
 FROM node:22-slim AS base
 WORKDIR /app
@@ -13,6 +16,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/mcp-server/package.json packages/mcp-server/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
+COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/loxone-mock/package.json packages/loxone-mock/package.json
 RUN npm ci
 COPY packages ./packages
@@ -37,3 +41,10 @@ COPY --from=base /app /app
 ENV MCP_SERVER_ENTRY=/app/packages/mcp-server/dist/index.js
 EXPOSE 8090
 CMD ["node", "packages/gateway/dist/index.js"]
+
+FROM node:22-slim AS dashboard
+WORKDIR /app
+COPY --from=base /app /app
+ENV MCP_SERVER_ENTRY=/app/packages/mcp-server/dist/index.js
+EXPOSE 8091
+CMD ["node", "packages/dashboard/dist/index.js"]

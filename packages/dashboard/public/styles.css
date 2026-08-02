@@ -1,0 +1,109 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8;
+  --card-bg: #ffffff;
+  --border: #e0e2e6;
+  --text: #1a1c20;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --alarm: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --card-bg: #1e2126;
+    --border: #2c2f36;
+    --text: #e6e8eb;
+    --muted: #9aa0aa;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status.connected { color: #16a34a; }
+.status.disconnected { color: var(--alarm); }
+
+main#rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+
+.room-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.room-card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.control-row:first-of-type { border-top: none; }
+
+.control-icon {
+  font-size: 1.1rem;
+  width: 1.4em;
+  text-align: center;
+}
+
+.control-name {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.control-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: right;
+}
+
+.control-value.on { color: var(--accent); }
+.control-value.alarm { color: var(--alarm); }
+
+.control-value.flash {
+  animation: flash 600ms ease-out;
+}
+
+@keyframes flash {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}

@@ -78,9 +78,9 @@ fi
 # --- 3. Build images (no loxone-mock — this is for a real Miniserver) -----
 
 info "Building Heron images (this can take a few minutes the first time)"
-$DC build heron-agent gateway
+$DC build heron-agent gateway dashboard
 
-# --- 4/5. Loxone connection setup (agent + gateway, separate configs) -----
+# --- 4/5. Loxone connection setup (agent + gateway + dashboard, separate configs) --
 
 if [[ ! -f ./data/agent/loxone-config.json ]]; then
     info "Loxone connection setup — agent"
@@ -96,17 +96,25 @@ else
     info "Gateway's Loxone connection already configured — skipping (delete data/gateway/loxone-config.json to redo)."
 fi
 
+if [[ ! -f ./data/dashboard/loxone-config.json ]]; then
+    info "Loxone connection setup — dashboard"
+    $DC run --rm -e HERON_LOXONE_CONFIG_PATH=/app/packages/dashboard/data/loxone-config.json dashboard node packages/agent/dist/setup.js
+else
+    info "Dashboard's Loxone connection already configured — skipping (delete data/dashboard/loxone-config.json to redo)."
+fi
+
 # --- 6. Start ---------------------------------------------------------------
 
 info "Starting Heron"
-$DC up -d heron-agent gateway
+$DC up -d heron-agent gateway dashboard
 
-# --- 7. Print what the phone needs -----------------------------------------
+# --- 7. Print what the phone/browser need -----------------------------------
 
 info "Done"
 lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 [[ -n "$lan_ip" ]] || lan_ip=$(ipconfig getifaddr en0 2>/dev/null || echo "<this-machine's-LAN-IP>")
 echo "Gateway address for the Android app: ${lan_ip}:8190"
+echo "Dashboard: http://${lan_ip}:8191"
 echo
 echo "Pairing token:"
 $DC logs gateway 2>&1 | grep -A1 "Pairing token" | tail -2

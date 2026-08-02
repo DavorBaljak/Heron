@@ -48,31 +48,21 @@
             android:textSize="16sp" />
     </ScrollView>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Always listening (say &#8220;Heron&#8221;)"
-            android:textSize="14sp" />
-
-        <Switch
-            android:id="@+id/alwaysListeningSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-    </LinearLayout>
-
-    <Button
+    <!-- Tap-to-talk button. While listening, the whole button pulses (see
+         showListeningIndicator/hideListeningIndicator in MainActivity) since
+         its own mic/waveform art is baked into a full-width, responsive image
+         rather than fixed-size overlay elements. -->
+    <ImageView
         android:id="@+id/micButton"
         android:layout_width="match_parent"
-        android:layout_height="80dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="🎤 Tap to talk" />
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/listen_button"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        android:contentDescription="Tap to talk to Heron" />
 
 </LinearLayout>

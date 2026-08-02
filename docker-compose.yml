@@ -40,3 +40,17 @@ services:
       - "8190:8090"
     volumes:
       - ./data/gateway:/app/packages/gateway/data
+
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    environment:
+      # Same setup-then-saved-file flow as heron-agent/gateway — no LOXONE_*
+      # here. No ANTHROPIC_API_KEY either: the dashboard is read-only display,
+      # it never calls Claude.
+      - DASHBOARD_PORT=8091
+    ports:
+      - "8191:8091"
+    volumes:
+      - ./data/dashboard:/app/packages/dashboard/data
