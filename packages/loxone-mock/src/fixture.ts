@@ -17,6 +17,7 @@ export const fixtureStructure = {
     "room-pool": { name: "Pool" },
     "room-roof": { name: "Roof" },
     "room-wells": { name: "Heat Pump Wells" },
+    "room-perimeter": { name: "Yard Perimeter" },
   },
   cats: {
     "cat-lighting": { name: "Lighting", type: "lights" },
@@ -27,6 +28,7 @@ export const fixtureStructure = {
     "cat-energy": { name: "Energy", type: "energy" },
     "cat-irrigation": { name: "Irrigation", type: "irrigation" },
     "cat-pool": { name: "Pool", type: "pool" },
+    "cat-cctv": { name: "CCTV", type: "cctv" },
   },
   controls: {
     // Living Room
@@ -307,6 +309,57 @@ export const fixtureStructure = {
       cat: "cat-climate",
       states: { temp: "state-well-outlet-temp" },
     },
+
+    // Yard perimeter — outdoor cameras/motion detection and entrance control
+    "ctrl-perimeter-camera-front": {
+      name: "Front Yard Camera",
+      type: "Camera",
+      room: "room-perimeter",
+      cat: "cat-cctv",
+      states: { motion: "state-perimeter-camera-front-motion" },
+    },
+    "ctrl-perimeter-camera-back": {
+      name: "Back Yard Camera",
+      type: "Camera",
+      room: "room-perimeter",
+      cat: "cat-cctv",
+      states: { motion: "state-perimeter-camera-back-motion" },
+    },
+    "ctrl-perimeter-camera-driveway": {
+      name: "Driveway Camera",
+      type: "Camera",
+      room: "room-perimeter",
+      cat: "cat-cctv",
+      states: { motion: "state-perimeter-camera-driveway-motion" },
+    },
+    "ctrl-perimeter-motion-front": {
+      name: "Front Yard Motion Detector",
+      type: "PresenceDetector",
+      room: "room-perimeter",
+      cat: "cat-security",
+      states: { motion: "state-perimeter-motion-front-active" },
+    },
+    "ctrl-perimeter-motion-back": {
+      name: "Back Yard Motion Detector",
+      type: "PresenceDetector",
+      room: "room-perimeter",
+      cat: "cat-security",
+      states: { motion: "state-perimeter-motion-back-active" },
+    },
+    "ctrl-perimeter-gate": {
+      name: "Entrance Gate",
+      type: "Gate",
+      room: "room-perimeter",
+      cat: "cat-security",
+      states: { position: "state-perimeter-gate-position" },
+    },
+    "ctrl-perimeter-intercom": {
+      name: "Entrance Intercom",
+      type: "Intercom",
+      room: "room-perimeter",
+      cat: "cat-security",
+      states: { ring: "state-perimeter-intercom-ring" },
+    },
   },
 };
 
@@ -372,4 +425,12 @@ export const fixtureStateValues: Record<string, number | string> = {
 
   "state-well-inlet-temp": 12.4,
   "state-well-outlet-temp": 8.1,
+
+  "state-perimeter-camera-front-motion": 0,
+  "state-perimeter-camera-back-motion": 0,
+  "state-perimeter-camera-driveway-motion": 0,
+  "state-perimeter-motion-front-active": 0,
+  "state-perimeter-motion-back-active": 0,
+  "state-perimeter-gate-position": 0,
+  "state-perimeter-intercom-ring": 0,
 };
