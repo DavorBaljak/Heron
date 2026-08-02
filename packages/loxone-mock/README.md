@@ -12,6 +12,12 @@ Mock of the Loxone Miniserver Web API for local testing of `@heron/mcp-server` w
 
 `GET /jdev/sps/scenes` lists named scenes; `GET /jdev/sps/scene/{id}` activates one, applying its whole bundle of state writes at once (e.g. `scene-good-morning`, `scene-away`, `scene-movie-night`, `scene-vacation`, `scene-good-night`, `scene-severe-weather`). This is **not a real Loxone endpoint** — real Miniservers have no generic scene concept in the structure file; scenes are normally built from virtual inputs/program blocks in Loxone Config. It exists here purely so multi-device "scene" actions can be exercised in tests. See `src/fixture.ts` (`fixtureScenes`) for the exact action lists.
 
+## History (mock-only extension)
+
+`GET /jdev/sps/history/{stateUuid}?from={unixSeconds}&to={unixSeconds}` returns ~90 days of synthetic hourly samples (`{ timestamp, value }`) for a handful of continuous-value states: per-room climate temps, the pool heater, the heat pump wells, the two solar arrays, and the main energy meter. `from`/`to` are optional. Values follow a seeded diurnal + slow seasonal pattern (plus solar day/cloud-cover and a rough load curve for the meter) so they look plausible, not just random noise — but the exact shape is synthetic, regenerated fresh each process start from a fixed seed (deterministic across runs).
+
+This is **not a real Loxone endpoint**. Real Miniservers expose statistics as monthly binary files retrieved over FTP (`/stats/...`), not a documented HTTP/JSON API — replicating that binary format wasn't worth the effort for a local test double, so this is a deliberately simpler stand-in for exercising history-consuming code.
+
 ## Known simplification
 
 Real Loxone WebSocket push (`ws://{host}/ws/rfc6455`) uses a proprietary binary message-header framing that isn't fully documented publicly. This mock instead:

@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { WebSocketServer } from "ws";
 import { AuthManager, type MockCredentials } from "./auth.js";
 import { fixtureScenes, fixtureStateValues, fixtureStructure } from "./fixture.js";
+import { getHistory, hasHistory } from "./history.js";
 import { StateStore, type StateUpdate } from "./state.js";
 
 export interface MockLoxoneOptions {
@@ -32,6 +33,13 @@ const DEFAULT_CREDENTIALS: MockCredentials = { user: "test", password: "test" };
  * the structure file — scenes are normally built from virtual inputs/program
  * blocks in Loxone Config. This exists purely so scene-style multi-device
  * actions can be exercised in tests.
+ *
+ * Mock-only extension (not a real Loxone endpoint): `/jdev/sps/history/{stateUuid}`
+ * returns ~90 days of synthetic historical samples for a handful of
+ * continuous-value states (temperatures, solar production, energy meter).
+ * Real Loxone stores statistics as monthly binary files retrieved over FTP,
+ * not a documented HTTP/JSON API — this is a deliberately simpler stand-in
+ * for testing history-consuming code, not a faithful protocol replica.
  */
 export function createMockLoxoneServer(options: MockLoxoneOptions = {}): Server {
   const auth = new AuthManager(options.credentials ?? DEFAULT_CREDENTIALS);
@@ -112,6 +120,23 @@ export function createMockLoxoneServer(options: MockLoxoneOptions = {}): Server 
         state.set(stateUuid, Number.isNaN(numeric) ? command : numeric);
       }
       send(command);
+      return;
+    }
+
+    if (url.pathname.startsWith("/jdev/sps/history/")) {
+      if (!auth.isValid(bearerToken())) {
+        unauthorized();
+        return;
+      }
+      const stateUuid = decodeURIComponent(segments[4] ?? "");
+      if (!hasHistory(stateUuid)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      const from = url.searchParams.has("from") ? Number(url.searchParams.get("from")) * 1000 : undefined;
+      const to = url.searchParams.has("to") ? Number(url.searchParams.get("to")) * 1000 : undefined;
+      send(getHistory(stateUuid, from, to));
       return;
     }
 

@@ -152,3 +152,39 @@ test("activating the severe-weather scene closes blinds and starts freeze protec
   });
   assert.equal(unknown.status, 404);
 });
+
+test("history endpoint returns ~90 days of samples and rejects without a token", async () => {
+  const unauthorized = await fetch(`${baseUrl}/jdev/sps/history/state-living-climate-temp`);
+  assert.equal(unauthorized.status, 401);
+
+  const { body } = await authenticate("test", "test");
+  const token = body.LL.value.token as string;
+
+  const { status, body: historyBody } = await getJson("/jdev/sps/history/state-living-climate-temp", {
+    Authorization: `Bearer ${token}`,
+  });
+  assert.equal(status, 200);
+  const samples = historyBody.LL.value as Array<{ timestamp: number; value: number }>;
+  assert.ok(samples.length > 2000, `expected ~90 days of hourly samples, got ${samples.length}`);
+  assert.ok(samples.every((sample) => typeof sample.value === "number" && sample.value > 10 && sample.value < 30));
+
+  const unknownState = await fetch(`${baseUrl}/jdev/sps/history/state-does-not-exist`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(unknownState.status, 404);
+});
+
+test("history endpoint filters by from/to (unix seconds)", async () => {
+  const { body } = await authenticate("test", "test");
+  const token = body.LL.value.token as string;
+
+  const now = Math.floor(Date.now() / 1000);
+  const oneDayAgo = now - 24 * 3600;
+  const { body: historyBody } = await getJson(
+    `/jdev/sps/history/state-solar-east-power?from=${oneDayAgo}&to=${now}`,
+    { Authorization: `Bearer ${token}` },
+  );
+  const samples = historyBody.LL.value as Array<{ timestamp: number; value: number }>;
+  assert.ok(samples.length > 0 && samples.length <= 26);
+  assert.ok(samples.every((sample) => sample.timestamp >= oneDayAgo * 1000 && sample.timestamp <= now * 1000));
+});
