@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { toAnthropicTools } from "./anthropicTools.js";
 import { fetchDiscoverySnapshot, loadDiscoveryCache, saveDiscoveryCache } from "./discoveryCache.js";
-import { loadLoxoneConfig } from "./loxoneConfig.js";
+import { ensureLoxoneConnection } from "./loxoneConnection.js";
 import { connectToMcpServer } from "./mcpClient.js";
 import { createSession } from "./session.js";
 
@@ -27,39 +27,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/**
- * There's no reliable way to auto-discover a Loxone Miniserver on the local
- * network, so credentials come from LOXONE_HOST/USER/PASSWORD (.env/shell —
- * Docker's config keeps working unchanged) or a saved config file. Credential
- * *entry* deliberately does not happen here or anywhere in this file: it's a
- * separate script (setup.ts) with no import of @anthropic-ai/sdk anywhere in
- * its dependency graph, so typed credentials structurally cannot reach the
- * chat/LLM code path — not just "we call this before the LLM stuff" by
- * convention, but a fact checkable from the import graph.
- */
-async function ensureLoxoneConnection(): Promise<void> {
-  if (process.env.LOXONE_HOST && process.env.LOXONE_USER && process.env.LOXONE_PASSWORD) {
-    return;
-  }
-
-  const configPath = process.env.HERON_LOXONE_CONFIG_PATH ?? DEFAULT_LOXONE_CONFIG_PATH;
-  const cached = await loadLoxoneConfig(configPath);
-  if (cached) {
-    process.env.LOXONE_HOST = cached.host;
-    process.env.LOXONE_USER = cached.user;
-    process.env.LOXONE_PASSWORD = cached.password;
-    console.log(`Using saved Loxone connection (${cached.host}) from ${configPath}.`);
-    return;
-  }
-
-  throw new Error(
-    "No Loxone connection configured. Run `npm run setup --workspace=@heron/agent` first " +
-      "(a separate tool that never touches the chat/LLM code path), then start the agent again.",
-  );
-}
-
 async function main() {
-  await ensureLoxoneConnection();
+  const loxoneConfigPath = process.env.HERON_LOXONE_CONFIG_PATH ?? DEFAULT_LOXONE_CONFIG_PATH;
+  await ensureLoxoneConnection(loxoneConfigPath);
 
   const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";

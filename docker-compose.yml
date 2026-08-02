@@ -23,3 +23,19 @@ services:
       - ./data/agent:/app/packages/agent/data
     stdin_open: true
     tty: true
+
+  gateway:
+    build:
+      context: .
+      target: gateway
+    depends_on:
+      - loxone-mock
+    environment:
+      # Same setup-then-saved-file flow as heron-agent — no LOXONE_* here.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
+      - GATEWAY_PORT=8090
+    ports:
+      - "8190:8090"
+    volumes:
+      - ./data/gateway:/app/packages/gateway/data
