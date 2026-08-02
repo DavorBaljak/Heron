@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { LoxoneClient } from "./loxone/client.js";
 import { registerDiscoveryTools } from "./tools/discovery/index.js";
+import { registerMonitoringTools } from "./tools/monitoring/index.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 try {
@@ -32,6 +33,7 @@ const server = new McpServer({
 });
 
 registerDiscoveryTools(server, client);
+registerMonitoringTools(server, client);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

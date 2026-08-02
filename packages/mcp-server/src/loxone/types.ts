@@ -30,6 +30,11 @@ export interface LoxoneScene {
   description: string;
 }
 
+export interface LoxoneHistorySample {
+  timestamp: number;
+  value: number | string;
+}
+
 export interface LoxoneClientOptions {
   host: string;
   user: string;

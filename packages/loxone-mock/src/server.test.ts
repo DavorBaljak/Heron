@@ -4,7 +4,22 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { after, before, test } from "node:test";
 import WebSocket from "ws";
+import { fixtureStateValues } from "./fixture.js";
 import { createMockLoxoneServer } from "./server.js";
+
+/** Consumes messages up to and including the initial-sync {type:"ready"} marker. */
+function waitForReady(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    const onMessage = (data: WebSocket.RawData) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "ready") {
+        ws.off("message", onMessage);
+        resolve();
+      }
+    };
+    ws.on("message", onMessage);
+  });
+}
 
 let server: Server;
 let baseUrl: string;
@@ -77,10 +92,14 @@ test("websocket push delivers a state update after a command", async () => {
   const token = body.LL.value.token as string;
 
   const ws = new WebSocket(`${wsUrl}/ws/rfc6455?token=${token}`);
+  // Attach the message listener before awaiting "open" — otherwise the
+  // initial-sync batch can arrive and be dropped before we're listening.
+  const ready = waitForReady(ws);
   await new Promise((resolve, reject) => {
     ws.on("open", resolve);
     ws.on("error", reject);
   });
+  await ready;
 
   const updatePromise = new Promise<{ uuid: string; value: number | string }>((resolve) => {
     ws.on("message", (data) => resolve(JSON.parse(data.toString())));
@@ -95,6 +114,36 @@ test("websocket push delivers a state update after a command", async () => {
   assert.equal(update.value, 1);
 
   ws.close();
+});
+
+test("websocket sends an initial snapshot of all current values before the ready marker", async () => {
+  const { body } = await authenticate("test", "test");
+  const token = body.LL.value.token as string;
+
+  const ws = new WebSocket(`${wsUrl}/ws/rfc6455?token=${token}`);
+  const initialSamples: Array<{ uuid: string; value: number | string }> = [];
+  // Attach the message listener before awaiting "open" — otherwise the
+  // initial-sync batch can arrive and be dropped before we're listening.
+  const gotReady = new Promise<void>((resolve) => {
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "ready") {
+        resolve();
+        return;
+      }
+      initialSamples.push(msg);
+    });
+  });
+  await new Promise((resolve, reject) => {
+    ws.on("open", resolve);
+    ws.on("error", reject);
+  });
+  await gotReady;
+  ws.close();
+
+  assert.equal(initialSamples.length, Object.keys(fixtureStateValues).length);
+  const light = initialSamples.find((sample) => sample.uuid === "state-living-light-active");
+  assert.equal(light?.value, fixtureStateValues["state-living-light-active"]);
 });
 
 test("lists scenes and rejects without a token", async () => {
@@ -117,10 +166,14 @@ test("activating the severe-weather scene closes blinds and starts freeze protec
   assert.equal(unauthorized.status, 401);
 
   const ws = new WebSocket(`${wsUrl}/ws/rfc6455?token=${token}`);
+  // Attach the message listener before awaiting "open" — otherwise the
+  // initial-sync batch can arrive and be dropped before we're listening.
+  const ready = waitForReady(ws);
   await new Promise((resolve, reject) => {
     ws.on("open", resolve);
     ws.on("error", reject);
   });
+  await ready;
 
   const updates: Array<{ uuid: string; value: number | string }> = [];
   const gotAllUpdates = new Promise<void>((resolve) => {

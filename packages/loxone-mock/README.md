@@ -22,7 +22,8 @@ This is **not a real Loxone endpoint**. Real Miniservers expose statistics as mo
 
 Real Loxone WebSocket push (`ws://{host}/ws/rfc6455`) uses a proprietary binary message-header framing that isn't fully documented publicly. This mock instead:
 - authenticates the WS upgrade via a `?token=` query parameter (real Loxone does this differently),
-- pushes plain JSON text frames (`{ "uuid": ..., "value": ... }`) per state change, instead of the real binary event-table format.
+- pushes plain JSON text frames (`{ "uuid": ..., "value": ... }`) per state change, instead of the real binary event-table format,
+- on connect, sends every current value as an individual frame followed by an invented `{ "type": "ready" }` marker, so a client can build an initial live-state cache without waiting for a change — real Loxone has no equivalent explicit marker.
 
 This is enough to exercise a client's subscribe/handle-update logic, but is not a byte-for-byte replica of the real wire format — don't rely on it to catch bugs in binary frame parsing against a real Miniserver.
 

@@ -25,7 +25,9 @@ const DEFAULT_CREDENTIALS: MockCredentials = { user: "test", password: "test" };
  * message-header framing that isn't fully documented publicly. This mock
  * instead pushes plain JSON text frames on `/ws/rfc6455` (`{ uuid, value }`
  * per state change) — enough to exercise a client's subscribe/handle-update
- * logic, but not a byte-for-byte replica of the real wire format.
+ * logic, but not a byte-for-byte replica of the real wire format. On connect,
+ * it also sends every current value followed by an invented `{type:"ready"}`
+ * marker, so a client can build an initial live-state cache immediately.
  *
  * Mock-only extension (not a real Loxone endpoint): `/jdev/sps/scenes` lists
  * named scenes, and `/jdev/sps/scene/{id}` activates one, applying its whole
@@ -193,6 +195,16 @@ export function createMockLoxoneServer(options: MockLoxoneOptions = {}): Server 
   });
 
   wss.on("connection", (ws) => {
+    // Real Loxone sends a batch of current values right after connecting, so
+    // a monitoring client knows current state without waiting for a change.
+    // This mock does the same, then a {type:"ready"} marker (invented — real
+    // Loxone has no equivalent signal) so a client knows the initial batch
+    // is complete and any further messages are live updates.
+    for (const sample of state.all()) {
+      ws.send(JSON.stringify(sample));
+    }
+    ws.send(JSON.stringify({ type: "ready" }));
+
     const onUpdate = (update: StateUpdate) => ws.send(JSON.stringify(update));
     state.on("update", onUpdate);
     ws.on("close", () => state.off("update", onUpdate));

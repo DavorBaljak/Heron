@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "bash -c 'shopt -s globstar; tsx --test src/**/*.test.ts'"
   },
   "dependencies": {
     "@heron/shared": "*",

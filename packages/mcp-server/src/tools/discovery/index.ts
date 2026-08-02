@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { LoxoneClient } from "../../loxone/client.js";
+import { errorResult, jsonResult } from "../jsonResult.js";
 
 export function registerDiscoveryTools(server: McpServer, client: LoxoneClient): void {
   server.registerTool(
@@ -61,10 +62,7 @@ export function registerDiscoveryTools(server: McpServer, client: LoxoneClient):
       const structure = await client.getStructure();
       const control = structure.controls[uuid];
       if (!control) {
-        return {
-          content: [{ type: "text", text: `No control found with uuid ${uuid}` }],
-          isError: true,
-        };
+        return errorResult(`No control found with uuid ${uuid}`);
       }
       return jsonResult(control);
     },
@@ -82,10 +80,4 @@ export function registerDiscoveryTools(server: McpServer, client: LoxoneClient):
       return jsonResult(scenes);
     },
   );
-}
-
-function jsonResult(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
-  };
 }
