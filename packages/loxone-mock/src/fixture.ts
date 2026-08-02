@@ -14,6 +14,9 @@ export const fixtureStructure = {
     "room-garage": { name: "Garage" },
     "room-terrace": { name: "Terrace" },
     "room-utility": { name: "Utility Room" },
+    "room-pool": { name: "Pool" },
+    "room-roof": { name: "Roof" },
+    "room-wells": { name: "Heat Pump Wells" },
   },
   cats: {
     "cat-lighting": { name: "Lighting", type: "lights" },
@@ -23,6 +26,7 @@ export const fixtureStructure = {
     "cat-audio": { name: "Audio", type: "audio" },
     "cat-energy": { name: "Energy", type: "energy" },
     "cat-irrigation": { name: "Irrigation", type: "irrigation" },
+    "cat-pool": { name: "Pool", type: "pool" },
   },
   controls: {
     // Living Room
@@ -254,6 +258,55 @@ export const fixtureStructure = {
       cat: "cat-security",
       states: { alarm: "state-utility-leak-alarm" },
     },
+
+    // Pool
+    "ctrl-pool-heater": {
+      name: "Pool Heater",
+      type: "IRoomControllerV2",
+      room: "room-pool",
+      cat: "cat-pool",
+      states: { temp: "state-pool-heater-temp", targetTemp: "state-pool-heater-target-temp" },
+    },
+    "ctrl-pool-pump": {
+      name: "Pool Pump",
+      type: "Switch",
+      room: "room-pool",
+      cat: "cat-pool",
+      states: { active: "state-pool-pump-active" },
+    },
+
+    // Roof — solar PV, two 6 kWp arrays angled 30° to catch morning and
+    // afternoon sun respectively.
+    "ctrl-solar-array-east": {
+      name: "Solar Array 1 (East-facing, 6 kWp, 30° tilt — morning sun)",
+      type: "SolarProducer",
+      room: "room-roof",
+      cat: "cat-energy",
+      states: { power: "state-solar-east-power", total: "state-solar-east-total" },
+    },
+    "ctrl-solar-array-west": {
+      name: "Solar Array 2 (West-facing, 6 kWp, 30° tilt — afternoon sun)",
+      type: "SolarProducer",
+      room: "room-roof",
+      cat: "cat-energy",
+      states: { power: "state-solar-west-power", total: "state-solar-west-total" },
+    },
+
+    // Heat pump wells (open-loop ground source: one supply, one return borehole)
+    "ctrl-well-inlet": {
+      name: "Heat Pump Inlet Well (Supply)",
+      type: "TemperatureSensor",
+      room: "room-wells",
+      cat: "cat-climate",
+      states: { temp: "state-well-inlet-temp" },
+    },
+    "ctrl-well-outlet": {
+      name: "Heat Pump Outlet Well (Return)",
+      type: "TemperatureSensor",
+      room: "room-wells",
+      cat: "cat-climate",
+      states: { temp: "state-well-outlet-temp" },
+    },
   },
 };
 
@@ -307,4 +360,16 @@ export const fixtureStateValues: Record<string, number | string> = {
   "state-utility-meter-power": 850,
   "state-utility-meter-total": 4231.6,
   "state-utility-leak-alarm": 0,
+
+  "state-pool-heater-temp": 25.2,
+  "state-pool-heater-target-temp": 27,
+  "state-pool-pump-active": 0,
+
+  "state-solar-east-power": 3.8,
+  "state-solar-east-total": 812.4,
+  "state-solar-west-power": 0.6,
+  "state-solar-west-total": 754.2,
+
+  "state-well-inlet-temp": 12.4,
+  "state-well-outlet-temp": 8.1,
 };

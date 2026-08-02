@@ -23,15 +23,17 @@ after(async () => {
 test("authenticates and fetches structure from the mock Miniserver", async () => {
   const structure = await client.getStructure();
 
-  assert.equal(Object.keys(structure.rooms).length, 10);
+  assert.equal(Object.keys(structure.rooms).length, 13);
   assert.equal(structure.rooms["room-living"]?.name, "Living Room");
 
-  assert.equal(Object.keys(structure.cats).length, 7);
+  assert.equal(Object.keys(structure.cats).length, 8);
   assert.equal(structure.cats["cat-lighting"]?.type, "lights");
 
-  assert.equal(Object.keys(structure.controls).length, 30);
+  assert.equal(Object.keys(structure.controls).length, 36);
   assert.equal(structure.controls["ctrl-living-light"]?.room, "room-living");
   assert.equal(structure.controls["ctrl-utility-meter"]?.cat, "cat-energy");
+  assert.equal(structure.controls["ctrl-solar-array-east"]?.room, "room-roof");
+  assert.equal(structure.controls["ctrl-well-inlet"]?.room, "room-wells");
 });
 
 test("caches the structure between calls within the TTL", async () => {
