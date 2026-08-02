@@ -66,7 +66,7 @@ test("command endpoint mutates device state and rejects without a token", async 
   const unauthorized = await fetch(`${baseUrl}/jdev/sps/io/ctrl-living-light/on`);
   assert.equal(unauthorized.status, 401);
 
-  const res = await fetch(`${baseUrl}/jdev/sps/io/ctrl-living-light/on`, {
+  const res = await fetch(`${baseUrl}/jdev/sps/io/ctrl-master-light/on`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   assert.equal(res.status, 200);
@@ -86,12 +86,12 @@ test("websocket push delivers a state update after a command", async () => {
     ws.on("message", (data) => resolve(JSON.parse(data.toString())));
   });
 
-  await fetch(`${baseUrl}/jdev/sps/io/ctrl-bedroom-light/on`, {
+  await fetch(`${baseUrl}/jdev/sps/io/ctrl-kids-light/on`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
   const update = await updatePromise;
-  assert.equal(update.uuid, "state-bedroom-light-active");
+  assert.equal(update.uuid, "state-kids-light-active");
   assert.equal(update.value, 1);
 
   ws.close();
