@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import { appendActionLog } from "./actionLog.js";
 import { toAnthropicTools } from "./anthropicTools.js";
 import {
   fetchDiscoverySnapshot,
@@ -23,9 +24,19 @@ const SYSTEM_PROMPT = `You are Heron, a natural-language interface for a home au
 You have no way to affect the house except by calling the tools you've been given —
 those tools are the entire, whitelisted surface of what you may do. Never claim to have
 taken an action you didn't call a tool for, and never guess device state; call a
-discovery/monitoring tool instead. If no tool can answer a question, say so plainly.`;
+discovery/monitoring tool instead. If no tool can answer a question, say so plainly.
+Action-tier tools (set_control_state, activate_scene) perform real writes against the
+house; the user will be asked to explicitly confirm each one before it runs, and may
+decline — if they do, tell them plainly rather than assuming it happened.`;
 
 const DEFAULT_DISCOVERY_CACHE_PATH = path.resolve(here, "../data/discovery-cache.json");
+const DEFAULT_ACTION_LOG_PATH = path.resolve(here, "../data/action-log.jsonl");
+
+// Confirmation gate for action-tier tools. This is a hardcoded allowlist the
+// agent itself controls — MCP tool "annotations" (destructiveHint etc.) are
+// documented by the SDK as hints a client must never base a security
+// decision on, since a server could always misreport them.
+const ACTION_TOOL_NAMES = new Set(["set_control_state", "activate_scene"]);
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -55,15 +66,26 @@ async function main() {
     await saveDiscoveryCache(cachePath, discovery);
     console.log(`Discovery complete — cached to ${cachePath}.`);
   }
+  const actionLogPath = process.env.HERON_ACTION_LOG_PATH ?? DEFAULT_ACTION_LOG_PATH;
 
   const messages: MessageParam[] = [];
-  const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  // rl.question() throws ERR_USE_AFTER_CLOSE once stdin hits EOF (e.g. piped
+  // input, non-interactive runs) — treat that as a clean end of input.
+  async function ask(prompt: string): Promise<string | undefined> {
+    try {
+      return await rl.question(prompt);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ERR_USE_AFTER_CLOSE") return undefined;
+      throw error;
+    }
+  }
 
   console.log('Heron agent ready. Type a message, "refresh" to re-run discovery, or "exit" to quit.');
-  rl.prompt();
-  // Iterating the interface (rather than repeated rl.question() calls)
-  // handles stdin EOF cleanly instead of throwing ERR_USE_AFTER_CLOSE.
-  for await (const input of rl) {
+  while (true) {
+    const input = await ask("> ");
+    if (input === undefined) break;
     const trimmed = input.trim();
     if (trimmed === "exit" || trimmed === "quit") break;
 
@@ -72,7 +94,6 @@ async function main() {
       discovery = await fetchDiscoverySnapshot(mcp);
       await saveDiscoveryCache(cachePath, discovery);
       console.log(`Discovery refreshed — cached to ${cachePath}.`);
-      rl.prompt();
       continue;
     }
 
@@ -102,7 +123,29 @@ async function main() {
 
       const toolResults: ToolResultBlockParam[] = [];
       for (const toolUse of toolUses) {
-        console.log(`  [calling ${toolUse.name}]`);
+        if (ACTION_TOOL_NAMES.has(toolUse.name)) {
+          console.log(`\nProposed action: ${toolUse.name}(${JSON.stringify(toolUse.input)})`);
+          const answer = await ask("Confirm and execute this action? [y/N] ");
+          const approved = answer !== undefined && /^y(es)?$/i.test(answer.trim());
+          await appendActionLog(actionLogPath, {
+            timestamp: new Date().toISOString(),
+            tool: toolUse.name,
+            arguments: toolUse.input,
+            confirmed: approved,
+          });
+          if (!approved) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: "The user declined to confirm this action; it was not executed.",
+              is_error: true,
+            });
+            continue;
+          }
+        } else {
+          console.log(`  [calling ${toolUse.name}]`);
+        }
+
         const result = await mcp.callTool({ name: toolUse.name, arguments: toolUse.input as Record<string, unknown> });
         toolResults.push({
           type: "tool_result",
@@ -113,8 +156,6 @@ async function main() {
       }
       messages.push({ role: "user", content: toolResults });
     }
-
-    rl.prompt();
   }
 
   rl.close();

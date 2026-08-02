@@ -71,3 +71,23 @@ test("concurrent calls on a freshly-constructed client don't race the auth hands
   await freshClient.close();
   await new Promise<void>((resolve) => freshServer.close(() => resolve()));
 });
+
+test("sendCommand mutates real device state, and rejects an unknown control", async () => {
+  assert.equal(await client.getLiveState("state-office-light-active"), 0);
+
+  const result = await client.sendCommand("ctrl-office-light", "on");
+  assert.equal(result, "on");
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(await client.getLiveState("state-office-light-active"), 1);
+
+  await assert.rejects(() => client.sendCommand("ctrl-does-not-exist", "on"), /Unknown control/);
+});
+
+test("activateScene applies a scene's bundle of writes, and rejects an unknown scene", async () => {
+  const result = await client.activateScene("scene-good-morning");
+  assert.equal(result.sceneId, "scene-good-morning");
+  assert.equal(result.actionsApplied, 4);
+
+  await assert.rejects(() => client.activateScene("scene-does-not-exist"), /Unknown scene/);
+});

@@ -125,6 +125,48 @@ export class LoxoneClient {
     return body.LL.value;
   }
 
+  /**
+   * Sends a command to a control, mutating real device state. This is the
+   * action tier — the caller (an MCP tool handler) must only invoke this
+   * after whatever confirmation-flow the agent enforces; the client itself
+   * does not gate this call.
+   */
+  async sendCommand(controlUuid: string, command: string): Promise<string> {
+    await this.ensureAuthenticated();
+    const res = await fetch(
+      `${this.baseUrl}/jdev/sps/io/${encodeURIComponent(controlUuid)}/${encodeURIComponent(command)}`,
+      { headers: { Authorization: `Bearer ${this.token?.token}` } },
+    );
+    if (res.status === 404) {
+      throw new Error(`Unknown control: ${controlUuid}`);
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to send Loxone command (${res.status})`);
+    }
+    const body = (await res.json()) as { LL: { value: string } };
+    return body.LL.value;
+  }
+
+  /**
+   * Activates a named scene (see listScenes — a Heron-mock-only extension),
+   * applying its whole bundle of state writes at once. Action tier, same
+   * caveat as sendCommand.
+   */
+  async activateScene(sceneId: string): Promise<{ sceneId: string; actionsApplied: number }> {
+    await this.ensureAuthenticated();
+    const res = await fetch(`${this.baseUrl}/jdev/sps/scene/${encodeURIComponent(sceneId)}`, {
+      headers: { Authorization: `Bearer ${this.token?.token}` },
+    });
+    if (res.status === 404) {
+      throw new Error(`Unknown scene: ${sceneId}`);
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to activate Loxone scene (${res.status})`);
+    }
+    const body = (await res.json()) as { LL: { value: { sceneId: string; actionsApplied: number } } };
+    return body.LL.value;
+  }
+
   private async ensureLiveConnection(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     await this.ensureAuthenticated();
