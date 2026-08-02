@@ -69,6 +69,19 @@ export function registerDiscoveryTools(server: McpServer, client: LoxoneClient):
       return jsonResult(control);
     },
   );
+
+  server.registerTool(
+    "list_scenes",
+    {
+      title: "List scenes",
+      description: "List named scenes that can be activated as a single bundled action (e.g. Good Morning, Away, Severe Weather).",
+      inputSchema: {},
+    },
+    async () => {
+      const scenes = await client.listScenes();
+      return jsonResult(scenes);
+    },
+  );
 }
 
 function jsonResult(value: unknown) {

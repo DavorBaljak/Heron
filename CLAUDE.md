@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/mcp-server`, `packages/agent`, and `packages/loxone-mock`. Discovery-tier MCP tools (`list_rooms`, `list_categories`, `list_controls`, `get_control`) are implemented and tested against the mock Miniserver; monitoring and action tiers are not yet implemented.
+Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/mcp-server`, `packages/agent`, and `packages/loxone-mock`. Discovery-tier MCP tools (`list_rooms`, `list_categories`, `list_controls`, `get_control`, `list_scenes`) are implemented and tested against the mock Miniserver; monitoring and action tiers are not yet implemented. The mock's house fixture (`packages/loxone-mock/src/fixture.ts`) covers 14 rooms and 43 controls (lighting, shading, per-room climate, audio, security/CCTV, pool, solar PV, heat pump wells, irrigation) plus 6 named scenes.
 
 ## Commands
 

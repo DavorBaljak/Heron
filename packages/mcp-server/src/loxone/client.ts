@@ -1,6 +1,6 @@
 import { acquireToken, killToken, type LoxoneToken } from "./auth.js";
 import { parseStructure } from "./parseStructure.js";
-import type { LoxoneClientOptions, LoxoneStructure } from "./types.js";
+import type { LoxoneClientOptions, LoxoneScene, LoxoneStructure } from "./types.js";
 
 const DEFAULT_STRUCTURE_CACHE_MS = 60_000;
 
@@ -43,6 +43,25 @@ export class LoxoneClient {
       this.structureFetchedAt = Date.now();
     }
     return this.structure;
+  }
+
+  /**
+   * Lists named scenes. This is a Heron-mock-only extension of the protocol
+   * (see packages/loxone-mock's README) — real Miniservers have no generic
+   * scene concept in the structure file.
+   */
+  async listScenes(): Promise<LoxoneScene[]> {
+    if (!this.token) {
+      await this.authenticate();
+    }
+    const res = await fetch(`${this.baseUrl}/jdev/sps/scenes`, {
+      headers: { Authorization: `Bearer ${this.token?.token}` },
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to list Loxone scenes (${res.status})`);
+    }
+    const body = (await res.json()) as { LL: { value: LoxoneScene[] } };
+    return body.LL.value;
   }
 
   private async fetchStructure(): Promise<LoxoneStructure> {

@@ -42,3 +42,9 @@ test("caches the structure between calls within the TTL", async () => {
   const second = await client.getStructure();
   assert.equal(first, second);
 });
+
+test("lists scenes from the mock Miniserver", async () => {
+  const scenes = await client.listScenes();
+  assert.equal(scenes.length, 6);
+  assert.ok(scenes.some((scene) => scene.id === "scene-severe-weather"));
+});

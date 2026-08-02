@@ -24,6 +24,12 @@ export interface LoxoneStructure {
   controls: Record<string, LoxoneControl>;
 }
 
+export interface LoxoneScene {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface LoxoneClientOptions {
   host: string;
   user: string;
