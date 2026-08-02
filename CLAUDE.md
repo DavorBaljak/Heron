@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Codename: **Heron**. This repository currently contains only `ARCHITECTURE.md` — no code has been written yet. There are no build, lint, or test commands to run because no project has been scaffolded.
+Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/mcp-server`, `packages/agent`, and `packages/loxone-mock`. Discovery-tier MCP tools (`list_rooms`, `list_categories`, `list_controls`, `get_control`) are implemented and tested against the mock Miniserver; monitoring and action tiers are not yet implemented.
+
+## Commands
+
+- `npm install` — install all workspace dependencies (run from repo root).
+- `npm run build` — build all packages.
+- `npm test --workspace=@heron/mcp-server` — run `@heron/mcp-server`'s tests (Node's built-in test runner via `tsx --test`), including the integration test that spins up `@heron/loxone-mock` in-process.
+- `npm run dev --workspace=@heron/loxone-mock` — start the mock Miniserver standalone (default port 8080, override with `PORT`).
+- `npm run dev --workspace=@heron/mcp-server` — start the MCP server over stdio; requires `LOXONE_HOST`, `LOXONE_USER`, `LOXONE_PASSWORD` env vars (point `LOXONE_HOST` at the mock, e.g. `localhost:8080`, for local testing).
+
+`@heron/loxone-mock` (see its README) does not implement real Loxone cryptography — it validates control flow and structure parsing only, not a substitute for testing against a real Miniserver.
 
 ## What this project is
 
