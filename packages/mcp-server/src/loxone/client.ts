@@ -44,11 +44,36 @@ export class LoxoneClient {
   }
 
   private async ensureAuthenticated(): Promise<void> {
-    if (this.token) return;
+    // validUntil is Unix seconds; treat a token expiring within 5s as already
+    // expired to avoid racing the Miniserver's own clock.
+    const isExpired = this.token !== undefined && Date.now() >= this.token.validUntil * 1000 - 5_000;
+    if (this.token && !isExpired) return;
+    if (isExpired) this.token = undefined;
     this.authPromise ??= this.authenticate().finally(() => {
       this.authPromise = undefined;
     });
     await this.authPromise;
+  }
+
+  /**
+   * Wraps an authenticated Loxone HTTP call with one retry: if the
+   * Miniserver rejects the (proactively-refreshed) token with a 401 anyway —
+   * e.g. it was killed/rotated server-side — clear it, re-authenticate once,
+   * and redo the request with the new token.
+   */
+  private authHeader(): Record<string, string> {
+    return { Authorization: `Bearer ${this.token?.token}` };
+  }
+
+  private async authenticatedFetch(url: string | URL): Promise<Response> {
+    await this.ensureAuthenticated();
+    let res = await fetch(url, { headers: this.authHeader() });
+    if (res.status === 401) {
+      this.token = undefined;
+      await this.ensureAuthenticated();
+      res = await fetch(url, { headers: this.authHeader() });
+    }
+    return res;
   }
 
   async close(): Promise<void> {
@@ -83,10 +108,7 @@ export class LoxoneClient {
    * scene concept in the structure file.
    */
   async listScenes(): Promise<LoxoneScene[]> {
-    await this.ensureAuthenticated();
-    const res = await fetch(`${this.baseUrl}/jdev/sps/scenes`, {
-      headers: { Authorization: `Bearer ${this.token?.token}` },
-    });
+    const res = await this.authenticatedFetch(`${this.baseUrl}/jdev/sps/scenes`);
     if (!res.ok) {
       throw new Error(`Failed to list Loxone scenes (${res.status})`);
     }
@@ -112,11 +134,10 @@ export class LoxoneClient {
    * HTTP/JSON API.
    */
   async getHistory(stateUuid: string, from?: number, to?: number): Promise<LoxoneHistorySample[] | undefined> {
-    await this.ensureAuthenticated();
     const url = new URL(`${this.baseUrl}/jdev/sps/history/${encodeURIComponent(stateUuid)}`);
     if (from !== undefined) url.searchParams.set("from", String(from));
     if (to !== undefined) url.searchParams.set("to", String(to));
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token?.token}` } });
+    const res = await this.authenticatedFetch(url);
     if (res.status === 404) return undefined;
     if (!res.ok) {
       throw new Error(`Failed to get Loxone history (${res.status})`);
@@ -132,10 +153,8 @@ export class LoxoneClient {
    * does not gate this call.
    */
   async sendCommand(controlUuid: string, command: string): Promise<string> {
-    await this.ensureAuthenticated();
-    const res = await fetch(
+    const res = await this.authenticatedFetch(
       `${this.baseUrl}/jdev/sps/io/${encodeURIComponent(controlUuid)}/${encodeURIComponent(command)}`,
-      { headers: { Authorization: `Bearer ${this.token?.token}` } },
     );
     if (res.status === 404) {
       throw new Error(`Unknown control: ${controlUuid}`);
@@ -153,10 +172,7 @@ export class LoxoneClient {
    * caveat as sendCommand.
    */
   async activateScene(sceneId: string): Promise<{ sceneId: string; actionsApplied: number }> {
-    await this.ensureAuthenticated();
-    const res = await fetch(`${this.baseUrl}/jdev/sps/scene/${encodeURIComponent(sceneId)}`, {
-      headers: { Authorization: `Bearer ${this.token?.token}` },
-    });
+    const res = await this.authenticatedFetch(`${this.baseUrl}/jdev/sps/scene/${encodeURIComponent(sceneId)}`);
     if (res.status === 404) {
       throw new Error(`Unknown scene: ${sceneId}`);
     }
@@ -192,10 +208,7 @@ export class LoxoneClient {
   }
 
   private async fetchStructure(): Promise<LoxoneStructure> {
-    await this.ensureAuthenticated();
-    const res = await fetch(`${this.baseUrl}/data/LoxAPP3.json`, {
-      headers: { Authorization: `Bearer ${this.token?.token}` },
-    });
+    const res = await this.authenticatedFetch(`${this.baseUrl}/data/LoxAPP3.json`);
     if (!res.ok) {
       throw new Error(`Failed to fetch Loxone structure file (${res.status})`);
     }

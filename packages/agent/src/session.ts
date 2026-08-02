@@ -25,10 +25,38 @@ decline — if they do, tell them plainly rather than assuming it happened.`;
 export const ACTION_TOOL_NAMES = new Set(["set_control_state", "activate_scene"]);
 
 export interface SessionHooks {
-  /** Must return true to actually execute the action; false/reject declines it. */
-  confirmAction(toolName: string, args: unknown): Promise<boolean>;
+  /**
+   * Must return true to actually execute the action; false/reject declines
+   * it. `description` is a natural-language summary (e.g. "Turn on Living
+   * Room Light") built from the discovery snapshot — show that to the user,
+   * not the raw tool name/JSON args, since the whole point of the agent is
+   * to translate function calls into something a person actually reads.
+   */
+  confirmAction(description: string, toolName: string, args: unknown): Promise<boolean>;
   /** Optional feedback for non-action (read-only) tool calls. */
   onToolCall?(toolName: string): void;
+}
+
+/** Turns a raw action-tier tool call into a sentence a person can read/hear, via discovery lookups. */
+function describeAction(toolName: string, args: unknown, discovery: DiscoverySnapshot): string {
+  const params = (args ?? {}) as Record<string, unknown>;
+
+  if (toolName === "set_control_state") {
+    const uuid = String(params.uuid ?? "");
+    const command = String(params.command ?? "");
+    const name = discovery.controls.find((control) => control.uuid === uuid)?.name ?? uuid;
+    if (command === "on") return `Turn on ${name}`;
+    if (command === "off") return `Turn off ${name}`;
+    return `Set ${name} to ${command}`;
+  }
+
+  if (toolName === "activate_scene") {
+    const id = String(params.id ?? "");
+    const name = discovery.scenes.find((scene) => scene.id === id)?.name ?? id;
+    return `Activate the "${name}" scene`;
+  }
+
+  return `${toolName}(${JSON.stringify(args)})`;
 }
 
 export interface SessionOptions {
@@ -83,7 +111,8 @@ export function createSession(options: SessionOptions): Session {
       const toolResults: ToolResultBlockParam[] = [];
       for (const toolUse of toolUses) {
         if (ACTION_TOOL_NAMES.has(toolUse.name)) {
-          const approved = await hooks.confirmAction(toolUse.name, toolUse.input);
+          const description = describeAction(toolUse.name, toolUse.input, discovery);
+          const approved = await hooks.confirmAction(description, toolUse.name, toolUse.input);
           await appendActionLog(actionLogPath, {
             timestamp: new Date().toISOString(),
             tool: toolUse.name,

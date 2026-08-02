@@ -11,7 +11,7 @@ const TOKEN = "test-pairing-token";
 const fakeSession: Session = {
   async handleMessage(text: string, hooks: SessionHooks) {
     if (text === "do the thing") {
-      const approved = await hooks.confirmAction("set_control_state", { uuid: "ctrl-x", command: "on" });
+      const approved = await hooks.confirmAction("Turn on Ctrl X", "set_control_state", { uuid: "ctrl-x", command: "on" });
       return approved ? "did it" : "declined";
     }
     return `echo: ${text}`;
@@ -63,37 +63,16 @@ test("authenticates and echoes a message round-trip", async () => {
   ws.close();
 });
 
-test("action-tier confirm_request/confirm_response round-trip (approved)", async () => {
+test("action-tier calls are auto-approved without a confirm_request round-trip", async () => {
   const ws = new WebSocket(wsUrl);
   await new Promise((resolve) => ws.on("open", resolve));
   ws.send(JSON.stringify({ type: "auth", token: TOKEN }));
   await nextMessage(ws);
 
   ws.send(JSON.stringify({ type: "message", text: "do the thing" }));
-  const confirmRequest = await nextMessage(ws);
-  assert.equal(confirmRequest.type, "confirm_request");
-  assert.equal(confirmRequest.tool, "set_control_state");
-
-  ws.send(JSON.stringify({ type: "confirm_response", approved: true }));
   const reply = await nextMessage(ws);
   assert.equal(reply.type, "response");
   assert.equal(reply.text, "did it");
-
-  ws.close();
-});
-
-test("action-tier confirm_request/confirm_response round-trip (declined)", async () => {
-  const ws = new WebSocket(wsUrl);
-  await new Promise((resolve) => ws.on("open", resolve));
-  ws.send(JSON.stringify({ type: "auth", token: TOKEN }));
-  await nextMessage(ws);
-
-  ws.send(JSON.stringify({ type: "message", text: "do the thing" }));
-  await nextMessage(ws); // confirm_request
-
-  ws.send(JSON.stringify({ type: "confirm_response", approved: false }));
-  const reply = await nextMessage(ws);
-  assert.equal(reply.text, "declined");
 
   ws.close();
 });

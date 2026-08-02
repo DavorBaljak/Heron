@@ -88,8 +88,8 @@ async function main() {
 
     const reply = await session.handleMessage(input, {
       onToolCall: (name) => console.log(`  [calling ${name}]`),
-      confirmAction: async (name, args) => {
-        console.log(`\nProposed action: ${name}(${JSON.stringify(args)})`);
+      confirmAction: async (description) => {
+        console.log(`\nProposed action: ${description}`);
         const answer = await ask("Confirm and execute this action? [y/N] ");
         return answer !== undefined && /^y(es)?$/i.test(answer.trim());
       },

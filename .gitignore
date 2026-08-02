@@ -4,4 +4,5 @@ dist/
 .env
 .env.local
 packages/agent/data/
+packages/gateway/data/
 /data/
