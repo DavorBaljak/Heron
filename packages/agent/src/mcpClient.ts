@@ -13,9 +13,13 @@ const DEFAULT_MCP_SERVER_ENTRY = path.resolve(here, "../../mcp-server/src/index.
  * talked to over stdio, exactly like any other MCP client.
  */
 export async function connectToMcpServer(): Promise<Client> {
+  const entry = process.env.MCP_SERVER_ENTRY ?? DEFAULT_MCP_SERVER_ENTRY;
+  // In dev we run the TS source directly via tsx; in Docker, MCP_SERVER_ENTRY
+  // points at the compiled dist/index.js instead, run directly with node.
+  const isCompiled = entry.endsWith(".js");
   const transport = new StdioClientTransport({
-    command: "npx",
-    args: ["tsx", process.env.MCP_SERVER_ENTRY ?? DEFAULT_MCP_SERVER_ENTRY],
+    command: isCompiled ? "node" : "npx",
+    args: isCompiled ? [entry] : ["tsx", entry],
     env: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<
       string,
       string

@@ -22,6 +22,16 @@ Codename: **Heron**. npm workspaces monorepo with `packages/shared`, `packages/m
 
 `@heron/loxone-mock` (see its README) genuinely validates the getkey2/gettoken HMAC auth handshake and mutates real in-memory device state via `/jdev/sps/io/{uuid}/{command}`, pushing updates over a `/ws/rfc6455` WebSocket. Its one known simplification: WS push uses plain JSON frames rather than Loxone's undocumented proprietary binary framing.
 
+## Docker
+
+`Dockerfile` is a multi-stage build with two runtime targets: `loxone-mock` (standalone) and `heron` (agent + mcp-server bundled together, since the agent spawns mcp-server as a child process rather than talking to it over the network — see `packages/agent/src/mcpClient.ts`). `docker-compose.yml` wires them up:
+
+- `docker compose up -d loxone-mock` — starts the mock on host port 8180 (container port 8080; 8080 may already be taken by something else on the host).
+- `docker compose run --rm heron-agent` — runs the interactive agent CLI against the running mock over the compose network (`LOXONE_HOST=loxone-mock:8080`). Reads `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` from the repo-root `.env` (compose auto-loads it for `${...}` substitution).
+- `docker compose down` — tear down.
+
+In the `heron` image, `MCP_SERVER_ENTRY` is set to the compiled `packages/mcp-server/dist/index.js`; `mcpClient.ts` runs it directly with `node` instead of `npx tsx` when the entry path ends in `.js`.
+
 ## What this project is
 
 Heron is an AI layer on top of an existing Loxone home-automation system, designed to be system-agnostic so other home-automation backends can be added later. It does not replace Loxone's own automation logic (Config/rules running on the Miniserver). Instead it adds a natural-language interface that interprets current system state and suggests changes, using broader context (weather forecast, calendar/vacations, guests, etc.) to help optimize the existing Loxone setup.

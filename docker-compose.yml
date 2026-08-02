@@ -1,0 +1,22 @@
+services:
+  loxone-mock:
+    build:
+      context: .
+      target: loxone-mock
+    ports:
+      - "8180:8080"
+
+  heron-agent:
+    build:
+      context: .
+      target: heron
+    depends_on:
+      - loxone-mock
+    environment:
+      - LOXONE_HOST=loxone-mock:8080
+      - LOXONE_USER=test
+      - LOXONE_PASSWORD=test
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
+    stdin_open: true
+    tty: true
