@@ -6,9 +6,12 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@heron/shared": "*"
+    "@heron/shared": "*",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }
