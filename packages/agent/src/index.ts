@@ -38,11 +38,13 @@ async function main() {
   console.log(`Connected. Available tools: ${mcpTools.map((t) => t.name).join(", ")}`);
 
   const messages: MessageParam[] = [];
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
 
   console.log('Heron agent ready. Type a message, or "exit" to quit.');
-  while (true) {
-    const input = await rl.question("> ");
+  rl.prompt();
+  // Iterating the interface (rather than repeated rl.question() calls)
+  // handles stdin EOF cleanly instead of throwing ERR_USE_AFTER_CLOSE.
+  for await (const input of rl) {
     if (input.trim() === "exit" || input.trim() === "quit") break;
 
     messages.push({ role: "user", content: input });
@@ -82,6 +84,8 @@ async function main() {
       }
       messages.push({ role: "user", content: toolResults });
     }
+
+    rl.prompt();
   }
 
   rl.close();
