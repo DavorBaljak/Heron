@@ -434,3 +434,121 @@ export const fixtureStateValues: Record<string, number | string> = {
   "state-perimeter-gate-position": 0,
   "state-perimeter-intercom-ring": 0,
 };
+
+// Scenes are not a generic part of the real Loxone structure file (they're
+// normally implemented via virtual inputs / program blocks in Loxone Config).
+// This is a Heron-specific mock extension: a named bundle of direct state
+// writes, so a scene can be discovered and activated as a single unit for
+// testing the action tier.
+export interface FixtureSceneAction {
+  state: string;
+  value: number | string;
+}
+
+export interface FixtureScene {
+  name: string;
+  description: string;
+  actions: FixtureSceneAction[];
+}
+
+export const fixtureScenes: Record<string, FixtureScene> = {
+  "scene-good-morning": {
+    name: "Good Morning",
+    description: "Open the bedroom blinds, turn on the kitchen light, set the living room to a comfortable temperature.",
+    actions: [
+      { state: "state-master-blind-position", value: 0 },
+      { state: "state-kids-blind-position", value: 0 },
+      { state: "state-kitchen-light-active", value: 1 },
+      { state: "state-living-climate-target-temp", value: 21 },
+    ],
+  },
+  "scene-away": {
+    name: "Away",
+    description: "Turn off all lights and audio, arm the alarm, and close both gates.",
+    actions: [
+      { state: "state-living-light-active", value: 0 },
+      { state: "state-kitchen-light-active", value: 0 },
+      { state: "state-master-light-active", value: 0 },
+      { state: "state-kids-light-active", value: 0 },
+      { state: "state-hallway-light-active", value: 0 },
+      { state: "state-living-audio-power", value: 0 },
+      { state: "state-master-audio-power", value: 0 },
+      { state: "state-terrace-audio-power", value: 0 },
+      { state: "state-hallway-alarm-armed", value: 1 },
+      { state: "state-perimeter-gate-position", value: 0 },
+      { state: "state-garage-gate-position", value: 0 },
+    ],
+  },
+  "scene-movie-night": {
+    name: "Movie Night",
+    description: "Dim the living room light, close the living room blind, and start the living room audio zone at a moderate volume.",
+    actions: [
+      { state: "state-living-light-active", value: 15 },
+      { state: "state-living-blind-position", value: 100 },
+      { state: "state-living-audio-power", value: 1 },
+      { state: "state-living-audio-volume", value: 35 },
+    ],
+  },
+  "scene-vacation": {
+    name: "Vacation Mode",
+    description: "Close all blinds and gates, arm the alarm, and turn off all lights, audio, and the pool pump for an extended absence.",
+    actions: [
+      { state: "state-living-light-active", value: 0 },
+      { state: "state-kitchen-light-active", value: 0 },
+      { state: "state-master-light-active", value: 0 },
+      { state: "state-kids-light-active", value: 0 },
+      { state: "state-bathroom-light-active", value: 0 },
+      { state: "state-office-light-active", value: 0 },
+      { state: "state-hallway-light-active", value: 0 },
+      { state: "state-garage-light-active", value: 0 },
+      { state: "state-terrace-light-active", value: 0 },
+      { state: "state-living-blind-position", value: 100 },
+      { state: "state-kitchen-blind-position", value: 100 },
+      { state: "state-office-blind-position", value: 100 },
+      { state: "state-living-audio-power", value: 0 },
+      { state: "state-master-audio-power", value: 0 },
+      { state: "state-terrace-audio-power", value: 0 },
+      { state: "state-pool-pump-active", value: 0 },
+      { state: "state-hallway-alarm-armed", value: 1 },
+      { state: "state-perimeter-gate-position", value: 0 },
+      { state: "state-garage-gate-position", value: 0 },
+    ],
+  },
+  "scene-good-night": {
+    name: "Good Night",
+    description: "Close all bedroom and living room blinds, turn off lights and the pool pump, and arm the alarm.",
+    actions: [
+      { state: "state-living-blind-position", value: 100 },
+      { state: "state-master-blind-position", value: 100 },
+      { state: "state-kids-blind-position", value: 100 },
+      { state: "state-living-light-active", value: 0 },
+      { state: "state-kitchen-light-active", value: 0 },
+      { state: "state-master-light-active", value: 0 },
+      { state: "state-kids-light-active", value: 0 },
+      { state: "state-hallway-light-active", value: 0 },
+      { state: "state-pool-pump-active", value: 0 },
+      { state: "state-hallway-alarm-armed", value: 1 },
+    ],
+  },
+  "scene-severe-weather": {
+    name: "Severe Weather (High Wind + Freezing Rain)",
+    description:
+      "Storm response for high wind and icy precipitation: close all blinds to protect windows from wind and ice, close both gates, stop irrigation, run the pool pump for freeze protection, and raise heating setpoints slightly against the cold snap.",
+    actions: [
+      { state: "state-living-blind-position", value: 100 },
+      { state: "state-kitchen-blind-position", value: 100 },
+      { state: "state-master-blind-position", value: 100 },
+      { state: "state-kids-blind-position", value: 100 },
+      { state: "state-office-blind-position", value: 100 },
+      { state: "state-perimeter-gate-position", value: 0 },
+      { state: "state-garage-gate-position", value: 0 },
+      { state: "state-terrace-irrigation-active", value: 0 },
+      { state: "state-pool-pump-active", value: 1 },
+      { state: "state-living-climate-target-temp", value: 22 },
+      { state: "state-kitchen-climate-target-temp", value: 22 },
+      { state: "state-master-climate-target-temp", value: 21 },
+      { state: "state-kids-climate-target-temp", value: 21 },
+      { state: "state-office-climate-target-temp", value: 21 },
+    ],
+  },
+};

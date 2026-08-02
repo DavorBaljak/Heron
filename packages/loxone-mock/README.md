@@ -8,6 +8,10 @@ Mock of the Loxone Miniserver Web API for local testing of `@heron/mcp-server` w
 - **Tokens**: issued with an expiry, checked on every protected endpoint (`data/LoxAPP3.json`, `jdev/sps/io/...`, the WebSocket upgrade), and invalidated by `killtoken`.
 - **Device state**: in-memory per-control state (see `src/fixture.ts`), mutated by `GET /jdev/sps/io/{uuid}/{command}` (`on`/`off`/numeric), and pushed to WebSocket subscribers on change.
 
+## Scenes (mock-only extension)
+
+`GET /jdev/sps/scenes` lists named scenes; `GET /jdev/sps/scene/{id}` activates one, applying its whole bundle of state writes at once (e.g. `scene-good-morning`, `scene-away`, `scene-movie-night`, `scene-vacation`, `scene-good-night`, `scene-severe-weather`). This is **not a real Loxone endpoint** — real Miniservers have no generic scene concept in the structure file; scenes are normally built from virtual inputs/program blocks in Loxone Config. It exists here purely so multi-device "scene" actions can be exercised in tests. See `src/fixture.ts` (`fixtureScenes`) for the exact action lists.
+
 ## Known simplification
 
 Real Loxone WebSocket push (`ws://{host}/ws/rfc6455`) uses a proprietary binary message-header framing that isn't fully documented publicly. This mock instead:

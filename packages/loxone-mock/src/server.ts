@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { WebSocketServer } from "ws";
 import { AuthManager, type MockCredentials } from "./auth.js";
-import { fixtureStateValues, fixtureStructure } from "./fixture.js";
+import { fixtureScenes, fixtureStateValues, fixtureStructure } from "./fixture.js";
 import { StateStore, type StateUpdate } from "./state.js";
 
 export interface MockLoxoneOptions {
@@ -25,6 +25,13 @@ const DEFAULT_CREDENTIALS: MockCredentials = { user: "test", password: "test" };
  * instead pushes plain JSON text frames on `/ws/rfc6455` (`{ uuid, value }`
  * per state change) — enough to exercise a client's subscribe/handle-update
  * logic, but not a byte-for-byte replica of the real wire format.
+ *
+ * Mock-only extension (not a real Loxone endpoint): `/jdev/sps/scenes` lists
+ * named scenes, and `/jdev/sps/scene/{id}` activates one, applying its whole
+ * set of state writes at once. Real Loxone has no generic "scene" concept in
+ * the structure file — scenes are normally built from virtual inputs/program
+ * blocks in Loxone Config. This exists purely so scene-style multi-device
+ * actions can be exercised in tests.
  */
 export function createMockLoxoneServer(options: MockLoxoneOptions = {}): Server {
   const auth = new AuthManager(options.credentials ?? DEFAULT_CREDENTIALS);
@@ -105,6 +112,39 @@ export function createMockLoxoneServer(options: MockLoxoneOptions = {}): Server 
         state.set(stateUuid, Number.isNaN(numeric) ? command : numeric);
       }
       send(command);
+      return;
+    }
+
+    if (url.pathname === "/jdev/sps/scenes") {
+      if (!auth.isValid(bearerToken())) {
+        unauthorized();
+        return;
+      }
+      const scenes = Object.entries(fixtureScenes).map(([id, scene]) => ({
+        id,
+        name: scene.name,
+        description: scene.description,
+      }));
+      send(scenes);
+      return;
+    }
+
+    if (url.pathname.startsWith("/jdev/sps/scene/")) {
+      if (!auth.isValid(bearerToken())) {
+        unauthorized();
+        return;
+      }
+      const sceneId = decodeURIComponent(segments[4] ?? "");
+      const scene = fixtureScenes[sceneId];
+      if (!scene) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      for (const action of scene.actions) {
+        state.set(action.state, action.value);
+      }
+      send({ sceneId, actionsApplied: scene.actions.length });
       return;
     }
 

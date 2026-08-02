@@ -96,3 +96,59 @@ test("websocket push delivers a state update after a command", async () => {
 
   ws.close();
 });
+
+test("lists scenes and rejects without a token", async () => {
+  const unauthorized = await fetch(`${baseUrl}/jdev/sps/scenes`);
+  assert.equal(unauthorized.status, 401);
+
+  const { body } = await authenticate("test", "test");
+  const token = body.LL.value.token as string;
+  const { status, body: scenesBody } = await getJson("/jdev/sps/scenes", { Authorization: `Bearer ${token}` });
+  assert.equal(status, 200);
+  const scenes = scenesBody.LL.value as Array<{ id: string; name: string }>;
+  assert.ok(scenes.some((scene) => scene.id === "scene-severe-weather"));
+});
+
+test("activating the severe-weather scene closes blinds and starts freeze protection", async () => {
+  const { body } = await authenticate("test", "test");
+  const token = body.LL.value.token as string;
+
+  const unauthorized = await fetch(`${baseUrl}/jdev/sps/scene/scene-severe-weather`);
+  assert.equal(unauthorized.status, 401);
+
+  const ws = new WebSocket(`${wsUrl}/ws/rfc6455?token=${token}`);
+  await new Promise((resolve, reject) => {
+    ws.on("open", resolve);
+    ws.on("error", reject);
+  });
+
+  const updates: Array<{ uuid: string; value: number | string }> = [];
+  const gotAllUpdates = new Promise<void>((resolve) => {
+    ws.on("message", (data) => {
+      updates.push(JSON.parse(data.toString()));
+      if (updates.length === 14) resolve();
+    });
+  });
+
+  const res = await fetch(`${baseUrl}/jdev/sps/scene/scene-severe-weather`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const resBody = (await res.json()) as { LL: { value: { actionsApplied: number } } };
+  assert.equal(resBody.LL.value.actionsApplied, 14);
+
+  await gotAllUpdates;
+  ws.close();
+
+  const blindUpdate = updates.find((u) => u.uuid === "state-living-blind-position");
+  assert.equal(blindUpdate?.value, 100);
+  const poolPumpUpdate = updates.find((u) => u.uuid === "state-pool-pump-active");
+  assert.equal(poolPumpUpdate?.value, 1);
+  const irrigationUpdate = updates.find((u) => u.uuid === "state-terrace-irrigation-active");
+  assert.equal(irrigationUpdate?.value, 0);
+
+  const unknown = await fetch(`${baseUrl}/jdev/sps/scene/scene-does-not-exist`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(unknown.status, 404);
+});
