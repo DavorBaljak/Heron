@@ -11,7 +11,7 @@ import {
   loadDiscoveryCache,
   saveDiscoveryCache,
 } from "./discoveryCache.js";
-import { loadLoxoneConfig, saveLoxoneConfig } from "./loxoneConfig.js";
+import { loadLoxoneConfig } from "./loxoneConfig.js";
 import { connectToMcpServer } from "./mcpClient.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -50,11 +50,15 @@ function requireEnv(name: string): string {
 
 /**
  * There's no reliable way to auto-discover a Loxone Miniserver on the local
- * network, so if LOXONE_HOST/USER/PASSWORD aren't already set (via .env or
- * the shell), ask for them here instead of requiring the user to dig
- * through config files — and remember the answer on disk for next time.
+ * network, so credentials come from LOXONE_HOST/USER/PASSWORD (.env/shell —
+ * Docker's config keeps working unchanged) or a saved config file. Credential
+ * *entry* deliberately does not happen here or anywhere in this file: it's a
+ * separate script (setup.ts) with no import of @anthropic-ai/sdk anywhere in
+ * its dependency graph, so typed credentials structurally cannot reach the
+ * chat/LLM code path — not just "we call this before the LLM stuff" by
+ * convention, but a fact checkable from the import graph.
  */
-async function ensureLoxoneConnection(ask: (prompt: string) => Promise<string | undefined>): Promise<void> {
+async function ensureLoxoneConnection(): Promise<void> {
   if (process.env.LOXONE_HOST && process.env.LOXONE_USER && process.env.LOXONE_PASSWORD) {
     return;
   }
@@ -69,22 +73,15 @@ async function ensureLoxoneConnection(ask: (prompt: string) => Promise<string | 
     return;
   }
 
-  console.log("No Loxone connection configured yet — let's set it up (saved for next time, not asked again).");
-  const host = (await ask("Loxone Miniserver address (host or host:port): "))?.trim();
-  const user = (await ask("Loxone username: "))?.trim();
-  const password = await ask("Loxone password: ");
-  if (!host || !user || !password) {
-    throw new Error("Loxone connection setup was not completed.");
-  }
-
-  process.env.LOXONE_HOST = host;
-  process.env.LOXONE_USER = user;
-  process.env.LOXONE_PASSWORD = password;
-  await saveLoxoneConfig(configPath, { host, user, password });
-  console.log(`Saved to ${configPath}.`);
+  throw new Error(
+    "No Loxone connection configured. Run `npm run setup --workspace=@heron/agent` first " +
+      "(a separate tool that never touches the chat/LLM code path), then start the agent again.",
+  );
 }
 
 async function main() {
+  await ensureLoxoneConnection();
+
   const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
@@ -100,8 +97,6 @@ async function main() {
       throw error;
     }
   }
-
-  await ensureLoxoneConnection(ask);
 
   console.log("Connecting to the Heron MCP server...");
   const mcp = await connectToMcpServer();
